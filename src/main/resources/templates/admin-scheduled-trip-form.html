@@ -1,0 +1,246 @@
+<!--admin-scheduled-trip-form.html-->
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${tripId == null} ? 'Admin - Schedule New Trip' : 'Admin - Edit Trip'">Admin - Schedule Trip</title>
+    <link rel="icon" type="image/png" th:href="@{/images/favicon.png}">
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <style>
+        nav { background-color: rgba(0,0,0,0.7); padding: 10px 30px; color: white; position: sticky; top: 0; z-index: 1000; }
+        nav span, nav a { color: white; text-decoration: none; margin-right: 20px; line-height: 30px; vertical-align: middle;}
+        nav span { font-weight: bold; font-size: 1.1em; }
+        nav a.nav-link { margin-left: 20px; }
+        nav a#logoutLink { float: right; }
+        nav a:hover { text-decoration: underline; }
+
+        .admin-form-container { background-color: rgba(255, 255, 255, 0.9); padding: 30px 40px; border-radius: 15px; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15); width: 100%; max-width: 750px; /* Slightly wider */ margin: 30px auto; color: #333; }
+        .admin-form-container h2 { text-align: center; margin-bottom: 25px; color: #333; font-weight: 600;}
+        .form-group { margin-bottom: 20px; }
+        .form-group label { font-weight: 500; display: block; margin-bottom: 8px; }
+        .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 1em; /* Ensure readable font */}
+        .form-row { display: flex; flex-wrap: wrap; /* Allow wrapping */ gap: 20px; }
+        .form-row .form-group { flex: 1; min-width: 200px; /* Minimum width before wrapping */ }
+
+        #apiResponse { text-align:center; margin-bottom: 15px; font-weight: bold; padding: 10px; border-radius: 5px; display: none; }
+        #apiResponse.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        #apiResponse.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+
+        .button-group { display: flex; justify-content: center; gap: 15px; margin-top: 30px; }
+        .btn-vibrant { padding: 10px 25px; font-size: 1em; font-weight: bold; border-radius: 6px; cursor: pointer; border: none; color: white; text-align: center; transition: 0.3s ease; text-transform: uppercase; letter-spacing: 0.5px; display: inline-block; width: auto; text-decoration: none; }
+        .btn-primary { background: linear-gradient(45deg, #007bff, #0056b3); }
+        .btn-primary:hover { background: linear-gradient(45deg, #0056b3, #007bff); transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        .btn-cancel { background-color: #6c757d; }
+        .btn-cancel:hover { background-color: #5a6268; transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+    </style>
+</head>
+<body class="bg-admin">
+<nav>
+    <span>BusApp Admin</span>
+    <a th:href="@{/admin/dashboard}" class="nav-link">Admin Home</a>
+    <a th:href="@{/admin/buses}" class="nav-link">Manage Buses</a>
+    <a th:href="@{/admin/routes}" class="nav-link">Manage Routes</a>
+    <a href="/admin/scheduled-trips" class="nav-link">Manage Trips</a>
+    <a href="#" id="logoutLink">Logout</a>
+</nav>
+
+<div class="admin-form-container">
+    <h2 th:text="${tripId == null} ? 'Schedule New Trip' : 'Edit Scheduled Trip'">Schedule Trip</h2>
+
+    <div id="apiResponse"></div>
+
+    <form id="tripForm" th:object="${scheduledTripRequestDto}">
+        <input type="hidden" id="tripId" name="tripId" th:value="${tripId}" />
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="busId">Select Bus:</label>
+                <select id="busId" name="busId" required th:field="*{busId}">
+                    <option value="">-- Select Bus --</option>
+                    <option th:each="bus : ${buses}"
+                            th:value="${bus.id}"
+                            th:text="${bus.busNumber + ' (' + bus.operatorName + ')'}">
+                        Bus Option
+                    </option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="routeId">Select Route:</label>
+                <select id="routeId" name="routeId" required th:field="*{routeId}">
+                    <option value="">-- Select Route --</option>
+                    <option th:each="route : ${routes}"
+                            th:value="${route.id}"
+                            th:text="${route.origin + ' -> ' + route.destination}">
+                        Route Option
+                    </option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="departureDate">Departure Date:</label>
+                <input type="date" id="departureDate" th:field="*{departureDate}" required>
+            </div>
+
+            <div class="form-group">
+                <label for="fare">Fare (₹):</label>
+                <input type="number" id="fare" step="0.01" min="1" placeholder="e.g., 450.50" th:field="*{fare}" required>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="departureTime">Departure Time:</label>
+                <input type="time" id="departureTime" th:field="*{departureTime}" required step="600">
+            </div>
+
+            <div class="form-group">
+                <label for="arrivalTime">Arrival Time:</label>
+                <input type="time" id="arrivalTime" th:field="*{arrivalTime}" required step="600">
+            </div>
+        </div>
+
+        <div class="button-group">
+            <button type="submit" class="btn-vibrant btn-primary">Save Schedule</button>
+            <a th:href="@{/admin/scheduled-trips}" class="btn-vibrant btn-cancel">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<script>
+    // --- Reusable Functions ---
+    function checkAdminAuth() {
+        const token = localStorage.getItem('authToken');
+        const rolesString = localStorage.getItem('userRoles');
+        let roles = [];
+        try { roles = rolesString ? JSON.parse(rolesString) : []; } catch(e) { console.error("Error parsing roles", e); }
+        if (!token || !roles.includes('ROLE_ADMIN')) {
+            console.log("Admin access required. Redirecting to login.");
+            localStorage.clear(); window.location.replace('/login'); return null;
+        } return token;
+    }
+
+    function showApiMessage(message, isError = false) {
+        const msgDiv = document.getElementById('apiResponse');
+        if (!msgDiv) return;
+        msgDiv.textContent = message;
+        msgDiv.className = isError ? 'error' : 'success';
+        msgDiv.style.display = 'block';
+        if (!isError) { // Auto-hide success message only
+            setTimeout(() => { if(msgDiv) msgDiv.style.display = 'none'; }, 5000);
+        }
+    }
+
+    function setupLogout() {
+        const logoutLink = document.getElementById('logoutLink');
+        if (logoutLink) {
+            logoutLink.removeEventListener('click', handleLogout);
+            logoutLink.addEventListener('click', handleLogout);
+        }
+    }
+    function handleLogout(event) {
+        event.preventDefault();
+        localStorage.clear();
+        console.log("Admin logged out, redirecting to login.");
+        window.location.href = '/login';
+    }
+
+    // --- Form Submission Logic ---
+    document.addEventListener('DOMContentLoaded', function () {
+        const token = checkAdminAuth();
+        if (!token) return;
+
+        const tripForm = document.getElementById('tripForm');
+        const tripIdField = document.getElementById('tripId'); // Hidden field holding ID for edit
+        const apiResponseDiv = document.getElementById('apiResponse');
+
+        if(!tripForm || !tripIdField || !apiResponseDiv) {
+            console.error("Trip Form elements not found!");
+            return;
+        }
+
+        tripForm.addEventListener('submit', async function (event) {
+            event.preventDefault();
+            apiResponseDiv.style.display = 'none';
+            apiResponseDiv.textContent = '';
+            apiResponseDiv.className = '';
+
+            const tripId = tripIdField.value;
+            const isEditMode = tripId && tripId !== '0' && tripId !== '';
+
+            // Collect data into the Request DTO structure
+            const tripData = {
+                busId: document.getElementById('busId').value,
+                routeId: document.getElementById('routeId').value,
+                departureDate: document.getElementById('departureDate').value,
+                departureTime: document.getElementById('departureTime').value,
+                arrivalTime: document.getElementById('arrivalTime').value,
+                fare: document.getElementById('fare').value
+            };
+
+            // Basic client-side validation
+            if (!tripData.busId || !tripData.routeId || !tripData.departureDate || !tripData.departureTime || !tripData.arrivalTime || !tripData.fare) {
+                showApiMessage("All fields except ID are required.", true);
+                return;
+            }
+            if (tripData.arrivalTime <= tripData.departureTime) {
+                showApiMessage("Arrival time must be later than departure time.", true);
+                return;
+            }
+
+
+            // Determine API URL and Method
+            const apiUrl = isEditMode ? `/api/admin/scheduled-trips/${tripId}` : '/api/admin/scheduled-trips';
+            const httpMethod = isEditMode ? 'PUT' : 'POST';
+
+            console.log(`Submitting trip data (${httpMethod}) to ${apiUrl}:`, tripData);
+
+            const currentToken = checkAdminAuth(); // Check token again
+            if (!currentToken) {
+                showApiMessage("Authentication error. Please log in again.", true);
+                setTimeout(() => { window.location.replace('/login'); }, 1000);
+                return;
+            }
+
+            // Send data via Fetch API
+            try {
+                const response = await fetch(apiUrl, {
+                    method: httpMethod,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${currentToken}`
+                    },
+                    body: JSON.stringify(tripData)
+                });
+
+                if (response.ok) {
+                    const result = await response.json(); // Get saved/updated trip data
+                    console.log('Save successful:', result);
+                    // Use sessionStorage to show message on list page after redirect
+                    sessionStorage.setItem('apiSuccessMessage', `Trip ${isEditMode ? 'updated' : 'scheduled'} successfully!`);
+                    window.location.href = '/admin/scheduled-trips'; // Redirect to list page
+
+                } else {
+                    const errorText = await response.text();
+                    let detailError = errorText;
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        detailError = errorJson.message || errorJson.error || errorText;
+                    } catch(e) { /* Ignore if not JSON */ }
+                    throw new Error(detailError || `Failed to save trip. Status: ${response.status}`);
+                }
+            } catch (error) {
+                console.error('Error saving trip:', error);
+                showApiMessage(`Error saving trip: ${error.message}`, true);
+            }
+        });
+
+        // Setup Logout
+        setupLogout();
+    });
+</script>
+</body>
+</html>

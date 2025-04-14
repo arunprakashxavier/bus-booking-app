@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Bookings - Bus Booking</title>
+    <link rel="icon" type="image/png" th:href="@{/images/favicon.png}">
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <style>
+        nav { background-color: rgba(0,0,0,0.7); padding: 10px 30px; color: white; overflow: hidden; position: sticky; top: 0; z-index: 1000;}
+        nav span, nav a { line-height: 30px; color: white; text-decoration: none; vertical-align: middle; }
+        nav span { font-weight: bold; font-size: 1.1em; }
+        nav a.nav-link { margin-left: 20px; }
+        nav a#logoutLink { float: right; }
+        nav a:hover { text-decoration: underline; }
+
+        .content-box { background-color: rgba(255, 255, 255, 0.92); padding: 25px 35px; border-radius: 15px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15); margin: 30px auto; max-width: 1100px; color: #333; }
+        .content-box h2 { text-align: center; margin-bottom: 25px; }
+
+        .booking-card { background-color: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px 20px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .booking-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; flex-wrap: wrap;}
+        .booking-header span { font-size: 0.95em; }
+        .booking-id { font-weight: bold; color: #0056b3; }
+        .booking-status { padding: 3px 8px; border-radius: 12px; font-size: 0.85em; font-weight: bold; color: white; }
+        .booking-status.CONFIRMED { background-color: #28a745; }
+        .booking-status.PENDING { background-color: #ffc107; color: #333; }
+        .booking-status.CANCELLED { background-color: #6c757d; }
+        .booking-status.FAILED { background-color: #dc3545; }
+
+        .booking-details { display: flex; flex-wrap: wrap; gap: 20px; }
+        .trip-info, .passenger-info { flex: 1; min-width: 300px; }
+        .trip-info h4, .passenger-info h4 { margin-top: 0; margin-bottom: 10px; font-size: 1.1em; color: #444; }
+        .trip-info p, .passenger-info p { margin: 5px 0; font-size: 0.95em; }
+        .trip-info strong, .passenger-info strong { color: #222; }
+        .passenger-list { list-style: none; padding: 0; margin: 0; }
+        .passenger-list li { background-color: #f8f9fa; padding: 5px 8px; border-radius: 4px; margin-bottom: 5px; font-size: 0.9em; }
+
+        #loadingMessage, #errorMessage, #noBookingsMessage { text-align: center; padding: 30px; font-size: 1.1em; color: #666; display: none; } /* Initially hidden */
+        #errorMessage { color: red; }
+
+        /* Payment Status Message from Redirect */
+        #paymentStatusMessage {
+            text-align: center; padding: 10px; margin-bottom: 15px;
+            border-radius: 5px; display: none; font-weight: bold;
+        }
+        #paymentStatusMessage.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        #paymentStatusMessage.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+
+    </style>
+    <script> const tokenOnLoadHistory = localStorage.getItem('authToken'); if (!tokenOnLoadHistory) { window.location.replace('/login'); } </script>
+</head>
+<body class="bg-user">
+
+<nav>
+    <span>BusApp</span>
+    <a href="/dashboard" class="nav-link">Dashboard</a>
+    <a href="/booking-history" class="nav-link">My Bookings</a>
+    <a href="/profile" class="nav-link">Profile</a>
+    <a href="#" id="logoutLink">Logout</a>
+</nav>
+
+<div class="content-box">
+    <h2>My Bookings</h2>
+
+    <div id="paymentStatusMessage"></div>
+    <div id="loadingMessage"><p>Loading your bookings...</p></div>
+    <div id="errorMessage"><p>Could not load booking history.</p></div>
+    <div id="noBookingsMessage"><p>You haven't made any bookings yet.</p></div>
+
+    <div id="bookingListContainer">
+    </div>
+</div>
+
+<script>
+    // --- Reusable Auth/Logout ---
+    function checkUserAuth() { const token = localStorage.getItem('authToken'); if (!token) { window.location.replace('/login'); return null; } return token; }
+    function setupLogout() { const logoutLink = document.getElementById('logoutLink'); if (logoutLink) { logoutLink.removeEventListener('click', handleLogout); logoutLink.addEventListener('click', handleLogout); } }
+    function handleLogout(event) { event.preventDefault(); localStorage.clear(); window.location.href = '/login'; }
+    function showMessage(elementId, show = true) { const el = document.getElementById(elementId); if(el) el.style.display = show ? 'block' : 'none'; }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        const token = checkUserAuth();
+        if (!token) return;
+        setupLogout();
+
+        const bookingListContainer = document.getElementById('bookingListContainer');
+        const loadingMsg = 'loadingMessage';
+        const errorMsg = 'errorMessage';
+        const noBookingsMsg = 'noBookingsMessage';
+        const paymentStatusMsg = 'paymentStatusMessage';
+
+        showMessage(loadingMsg, true); // Show loading message
+        showMessage(errorMsg, false);
+        showMessage(noBookingsMsg, false);
+        showMessage(paymentStatusMsg, false); // Hide payment status initially
+
+        // --- Check for Payment Status from URL ---
+        const urlParams = new URLSearchParams(window.location.search);
+        const paymentAttempt = urlParams.get('payment_attempt');
+        const statusBookingId = urlParams.get('booking_id'); // Get booking ID from param
+
+        if (paymentAttempt === 'true' && statusBookingId) {
+            // We came back from a payment attempt. We need to check the *actual* status.
+            // The webhook should have updated the backend by now (usually).
+            showMessage(paymentStatusMsg, true);
+            document.getElementById(paymentStatusMsg).textContent = 'Checking payment status...';
+            document.getElementById(paymentStatusMsg).className = ''; // Reset class
+
+            try {
+                // Ideally, have a specific endpoint like GET /api/user/bookings/{id}/status
+                // For now, we refetch all bookings and find the relevant one. This isn't ideal.
+                // Let's assume we'll check status within the main fetch below.
+            } catch (e) {
+                document.getElementById(paymentStatusMsg).textContent = 'Could not verify payment status.';
+                document.getElementById(paymentStatusMsg).className = 'error';
+            }
+            // Clean the URL params
+            window.history.replaceState({}, document.title, "/booking-history");
+        }
+
+        // --- Fetch Booking History ---
+        try {
+            const response = await fetch('/api/user/bookings', {
+                method: 'GET',
+                headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+
+            const bookings = await response.json();
+            showMessage(loadingMsg, false); // Hide loading
+
+            if (!bookings || bookings.length === 0) {
+                showMessage(noBookingsMsg, true); // Show no bookings message
+            } else {
+                displayBookings(bookings, statusBookingId); // Pass bookingId to check status
+            }
+
+        } catch (error) {
+            console.error('Error fetching booking history:', error);
+            showMessage(loadingMsg, false);
+            showMessage(errorMsg, true); // Show error message
+        }
+    });
+
+    function displayBookings(bookings, checkStatusForBookingId) {
+        const container = document.getElementById('bookingListContainer');
+        container.innerHTML = ''; // Clear previous content
+
+        bookings.forEach(booking => {
+            const card = document.createElement('div');
+            card.className = 'booking-card';
+
+            // Header
+            const header = document.createElement('div');
+            header.className = 'booking-header';
+            const bookingIdSpan = document.createElement('span');
+            bookingIdSpan.innerHTML = `Booking ID: <strong class="booking-id">${booking.bookingId}</strong>`;
+            const statusSpan = document.createElement('span');
+            statusSpan.textContent = booking.status;
+            statusSpan.className = `booking-status ${booking.status}`; // Use status for class
+            const bookingTime = booking.bookingTime ? new Date(booking.bookingTime).toLocaleString() : 'N/A';
+            const timeSpan = document.createElement('span');
+            timeSpan.textContent = `Booked on: ${bookingTime}`;
+            header.appendChild(bookingIdSpan);
+            header.appendChild(timeSpan);
+            header.appendChild(statusSpan);
+
+            // Details
+            const detailsDiv = document.createElement('div');
+            detailsDiv.className = 'booking-details';
+
+            // Trip Info
+            const tripInfoDiv = document.createElement('div');
+            tripInfoDiv.className = 'trip-info';
+            let tripHtml = '<h4>Trip Details</h4>';
+            if (booking.tripDetails) {
+                const trip = booking.tripDetails;
+                const busInfo = trip.bus ? `${trip.bus.operatorName} (${trip.bus.busType})` : 'N/A';
+                const routeInfo = trip.route ? `${trip.route.origin} → ${trip.route.destination}` : 'N/A';
+                const depDate = trip.departureDate ? new Date(trip.departureDate).toLocaleDateString() : 'N/A';
+                const depTime = trip.departureTime ? trip.departureTime.substring(0, 5) : '--:--';
+                const arrTime = trip.arrivalTime ? trip.arrivalTime.substring(0, 5) : '--:--';
+                const fare = trip.fare != null ? `₹${booking.totalFare.toFixed(2)}` : 'N/A'; // Use total booking fare
+
+                tripHtml += `<p><strong>Route:</strong> ${routeInfo}</p>`;
+                tripHtml += `<p><strong>Bus:</strong> ${busInfo}</p>`;
+                tripHtml += `<p><strong>Departure:</strong> ${depDate} at ${depTime}</p>`;
+                tripHtml += `<p><strong>Total Fare:</strong> ${fare}</p>`;
+            } else {
+                tripHtml += '<p>Trip details not available.</p>';
+            }
+            tripInfoDiv.innerHTML = tripHtml;
+
+            // Passenger Info
+            const passengerInfoDiv = document.createElement('div');
+            passengerInfoDiv.className = 'passenger-info';
+            let passengerHtml = `<h4>Passengers (${booking.passengers?.length || 0})</h4>`;
+            if (booking.passengers && booking.passengers.length > 0) {
+                passengerHtml += '<ul class="passenger-list">';
+                booking.passengers.forEach(p => {
+                    passengerHtml += `<li>${p.name} (Seat: ${p.seatNumber || 'N/A'})</li>`;
+                });
+                passengerHtml += '</ul>';
+            } else {
+                passengerHtml += '<p>No passenger details available.</p>';
+            }
+            passengerInfoDiv.innerHTML = passengerHtml;
+
+            detailsDiv.appendChild(tripInfoDiv);
+            detailsDiv.appendChild(passengerInfoDiv);
+
+            card.appendChild(header);
+            card.appendChild(detailsDiv);
+            container.appendChild(card);
+
+            // Check and display payment status message if this is the relevant booking
+            if (checkStatusForBookingId && booking.bookingId == checkStatusForBookingId) {
+                const paymentStatusMsgDiv = document.getElementById('paymentStatusMessage');
+                if (paymentStatusMsgDiv) {
+                    if (booking.status === 'CONFIRMED') {
+                        paymentStatusMsgDiv.textContent = 'Payment successful! Your booking is confirmed.';
+                        paymentStatusMsgDiv.className = 'success';
+                    } else if (booking.status === 'FAILED') {
+                        paymentStatusMsgDiv.textContent = 'Payment failed. Please try booking again.';
+                        paymentStatusMsgDiv.className = 'error';
+                    } else if (booking.status === 'PENDING') {
+                        paymentStatusMsgDiv.textContent = 'Payment is still pending. Please wait or contact support.';
+                        paymentStatusMsgDiv.className = ''; // Neutral style
+                    } else {
+                        paymentStatusMsgDiv.textContent = 'Booking status: ' + booking.status;
+                        paymentStatusMsgDiv.className = '';
+                    }
+                    showMessage('paymentStatusMessage', true); // Show the message div
+                }
+            }
+        });
+
+        // If we looped through all bookings and didn't find the one we were checking status for
+        const paymentStatusMsgDiv = document.getElementById('paymentStatusMessage');
+        if (checkStatusForBookingId && paymentStatusMsgDiv && paymentStatusMsgDiv.style.display === 'none') {
+            paymentStatusMsgDiv.textContent = 'Could not find booking details to verify payment status.';
+            paymentStatusMsgDiv.className = 'error';
+            showMessage('paymentStatusMessage', true);
+        }
+    }
+
+</script>
+</body>
+</html>

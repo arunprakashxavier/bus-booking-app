@@ -1,0 +1,228 @@
+<!--admin-bus-form-->
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${busDto.id == null} ? 'Admin - Add Bus' : 'Admin - Edit Bus'">Admin - Bus Form</title>
+    <link rel="icon" type="image/png" th:href="@{/images/favicon.png}">
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <style>
+        /* Navbar styling */
+        nav { background-color: rgba(0,0,0,0.7); padding: 10px 30px; color: white; position: sticky; top: 0; z-index: 1000; }
+        nav span, nav a { color: white; text-decoration: none; margin-right: 20px; line-height: 30px; vertical-align: middle;}
+        nav span { font-weight: bold; font-size: 1.1em; }
+        nav a.nav-link { margin-left: 20px; }
+        nav a#logoutLink { float: right; }
+        nav a:hover { text-decoration: underline; }
+
+        /* Form Container Styling */
+        .admin-form-container { background-color: rgba(255, 255, 255, 0.9); padding: 30px 40px; border-radius: 15px; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15); width: 100%; max-width: 700px; margin: 30px auto; color: #333; }
+        .admin-form-container h2 { text-align: center; margin-bottom: 25px; color: #333; font-weight: 600;}
+        .form-group { margin-bottom: 15px; }
+        .form-group label { font-weight: 500; display: block; margin-bottom: 5px; }
+        .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+
+        /* Amenities Layout using CSS Grid */
+        .amenities-group { margin-bottom: 20px; padding: 15px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #f9f9f9; }
+        .amenities-group label.group-label { margin-bottom: 12px; font-weight: 600; display: block; color: #555; }
+        .amenities-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px 15px; }
+        .amenity-item { display: flex; align-items: center; background-color: #fff; padding: 4px 6px; border-radius: 4px; border: 1px solid #eee; }
+        .amenities-group label.amenity-label { margin-left: 6px; font-weight: normal; margin-bottom: 0; display: inline; }
+        .amenities-group input[type=checkbox] { margin: 0; vertical-align: middle; }
+
+        /* Feedback messages */
+        #apiResponse { text-align:center; margin-bottom: 15px; font-weight: bold; padding: 10px; border-radius: 5px; display: none; }
+        #apiResponse.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        #apiResponse.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+
+        /* Buttons */
+        .button-group { display: flex; justify-content: center; gap: 15px; margin-top: 30px; }
+        .btn-vibrant { padding: 10px 25px; font-size: 1em; font-weight: bold; border-radius: 6px; cursor: pointer; border: none; color: white; text-align: center; transition: 0.3s ease; text-transform: uppercase; letter-spacing: 0.5px; display: inline-block; width: auto; text-decoration: none; }
+        .btn-primary { background: linear-gradient(45deg, #007bff, #0056b3); }
+        .btn-primary:hover { background: linear-gradient(45deg, #0056b3, #007bff); transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        .btn-cancel { background-color: #6c757d; }
+        .btn-cancel:hover { background-color: #5a6268; transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+    </style>
+</head>
+<body class="bg-admin">
+<nav>
+    <span>BusApp Admin</span>
+    <a href="/admin/dashboard" class="nav-link">Admin Home</a>
+    <a href="/admin/buses" class="nav-link">Manage Buses</a>
+    <a href="/admin/routes" class="nav-link">Manage Routes</a>
+    <a href="/admin/scheduled-trips" class="nav-link">Manage Trips</a>
+    <a href="/admin/bookings" class="nav-link">View Bookings</a> <a href="#" id="logoutLink">Logout</a>
+</nav>
+
+<div class="admin-form-container">
+    <h2 th:text="${busDto.id == null} ? 'Add New Bus' : 'Edit Bus'">Bus Form</h2>
+    <div id="apiResponse"></div>
+    <form id="busForm" th:object="${busDto}">
+        <input type="hidden" id="id" th:field="*{id}" />
+        <div class="form-group">
+            <label for="busNumber">Bus Number:</label>
+            <input type="text" id="busNumber" placeholder="e.g., TN-01-XX-1234" th:field="*{busNumber}" required>
+        </div>
+        <div class="form-group">
+            <label for="operatorName">Operator Name:</label>
+            <input type="text" id="operatorName" placeholder="e.g., SRS Travels" th:field="*{operatorName}" required>
+        </div>
+        <div class="form-group">
+            <label for="busType">Bus Type:</label>
+            <input type="text" id="busType" placeholder="e.g., AC Sleeper (2+1)" th:field="*{busType}" required>
+        </div>
+        <div class="form-group">
+            <label for="totalSeats">Total Seats:</label>
+            <input type="number" id="totalSeats" placeholder="e.g., 30" th:field="*{totalSeats}" required min="1">
+        </div>
+        <div class="form-group amenities-group">
+            <label class="group-label">Amenities:</label>
+            <div class="amenities-grid">
+                <th:block th:with="availableAmenities=${ {'WiFi', 'Charging Point', 'Water Bottle', 'Blanket', 'Live Tracking', 'Toilet', 'AC', 'Reading Light', 'Snacks'} }">
+                    <th:block th:each="amenityOpt : ${availableAmenities}">
+                        <div class="amenity-item">
+                            <input type="checkbox" th:id="${'amenity-' + #strings.replace(amenityOpt,' ','_')}"
+                                   name="amenities" th:value="${amenityOpt}"
+                                   th:checked="${busDto.amenities != null && #sets.contains(busDto.amenities, amenityOpt)}" />
+                            <label th:for="${'amenity-' + #strings.replace(amenityOpt,' ','_')}"
+                                   th:text="${amenityOpt}" class="amenity-label"></label>
+                        </div>
+                    </th:block>
+                </th:block>
+            </div>
+        </div>
+        <div class="button-group">
+            <button type="submit" class="btn-vibrant btn-primary">Save Bus</button>
+            <a th:href="@{/admin/buses}" class="btn-vibrant btn-cancel">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<script>
+    // JS Unchanged from when Bus Form submission was implemented
+    // (Handles checkAdminAuth, showApiMessage, setupLogout, handleLogout, form submit listener for bus)
+    function checkAdminAuth() { /* ... */}
+    function showApiMessage(message, isError = false) { /* ... */ }
+    document.addEventListener('DOMContentLoaded', function () { /* ... */ });
+    function setupLogout() { /* ... */ }
+    function handleLogout(event) { /* ... */ }
+    function checkAdminAuth() {
+        const token = localStorage.getItem('authToken');
+        const rolesString = localStorage.getItem('userRoles');
+        let roles = [];
+        try { roles = rolesString ? JSON.parse(rolesString) : []; } catch(e) { console.error("Error parsing roles", e); }
+        if (!token || !roles.includes('ROLE_ADMIN')) {
+            console.log("Admin access required. Redirecting to login.");
+            localStorage.clear(); window.location.replace('/login'); return null;
+        } return token;
+    }
+
+    function showApiMessage(message, isError = false) {
+        const msgDiv = document.getElementById('apiResponse');
+        if (!msgDiv) return;
+        msgDiv.textContent = message;
+        msgDiv.className = isError ? 'error' : 'success';
+        msgDiv.style.display = 'block';
+        setTimeout(() => { if(msgDiv) msgDiv.style.display = 'none'; }, 5000);
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const token = checkAdminAuth();
+        if (!token) return;
+
+        const busForm = document.getElementById('busForm');
+        const busIdField = document.getElementById('id');
+        const apiResponseDiv = document.getElementById('apiResponse');
+
+        if(!busForm || !busIdField || !apiResponseDiv) {
+            console.error("Form elements not found!");
+            return;
+        }
+
+        busForm.addEventListener('submit', async function (event) {
+            event.preventDefault();
+            apiResponseDiv.style.display = 'none';
+            apiResponseDiv.textContent = '';
+            apiResponseDiv.className = '';
+
+            const busId = busIdField.value;
+            const isEditMode = busId && busId !== '0' && busId !== '';
+
+            const selectedAmenities = [];
+            const amenityCheckboxes = document.querySelectorAll('input[name="amenities"]:checked');
+            amenityCheckboxes.forEach(checkbox => {
+                selectedAmenities.push(checkbox.value);
+            });
+
+            const busData = {
+                id: isEditMode ? busId : null,
+                busNumber: document.getElementById('busNumber').value,
+                operatorName: document.getElementById('operatorName').value,
+                busType: document.getElementById('busType').value,
+                totalSeats: parseInt(document.getElementById('totalSeats').value, 10),
+                amenities: selectedAmenities
+            };
+
+            const apiUrl = isEditMode ? `/api/admin/buses/${busId}` : '/api/admin/buses';
+            const httpMethod = isEditMode ? 'PUT' : 'POST';
+
+            console.log(`Submitting bus data (${httpMethod}) to ${apiUrl}:`, busData);
+
+            const currentToken = localStorage.getItem('authToken');
+            if (!currentToken) {
+                showApiMessage("Authentication error. Please log in again.", true);
+                setTimeout(() => { window.location.replace('/login'); }, 1000);
+                return;
+            }
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: httpMethod,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${currentToken}`
+                    },
+                    body: JSON.stringify(busData)
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    console.log('Save successful:', result);
+                    sessionStorage.setItem('apiSuccessMessage', `Bus ${isEditMode ? 'updated' : 'added'} successfully!`);
+                    window.location.href = '/admin/buses';
+
+                } else {
+                    const errorText = await response.text();
+                    let detailError = errorText;
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        detailError = errorJson.message || errorJson.error || errorText;
+                    } catch(e) { /* Ignore if not JSON */ }
+                    throw new Error(detailError || `Failed to save bus. Status: ${response.status}`);
+                }
+            } catch (error) {
+                console.error('Error saving bus:', error);
+                showApiMessage(`Error saving bus: ${error.message}`, true);
+            }
+        });
+
+        setupLogout();
+    });
+
+    function setupLogout() {
+        const logoutLink = document.getElementById('logoutLink');
+        if (logoutLink) {
+            logoutLink.removeEventListener('click', handleLogout);
+            logoutLink.addEventListener('click', handleLogout);
+        }
+    }
+    function handleLogout(event) {
+        event.preventDefault();
+        localStorage.clear();
+        console.log("Admin logged out, redirecting to login.");
+        window.location.href = '/login';
+    }
+</script>
+</body>
+</html>

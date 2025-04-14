@@ -1,0 +1,94 @@
+/* src/main/resources/static/css/style.css */
+
+/* General Body Styling & Backgrounds */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 0; /* Reset padding */
+    background-size: cover;
+    background-position: center center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    min-height: 100vh;
+    color: #333;
+}
+
+/* Apply specific backgrounds based on body class */
+body.bg-login-register {
+    background-image: url('/images/loginregister.jpg');
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-top: 0;
+}
+
+body.bg-admin {
+    background-image: url('/images/admin.jpg');
+    color: #333; /* Setting default text color for admin pages */
+    /* Ensure default block layout */
+    display: block;
+}
+
+body.bg-user {
+    background-image: url('/images/user.jpg');
+    /* Ensure default block layout */
+    display: block;
+}
+
+
+/* Translucent Form Container (Used on login/register) */
+.form-container {
+    background-color: rgba(255, 255, 255, 0.85);
+    padding: 30px 40px;
+    border-radius: 15px;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+    width: 100%;
+    max-width: 450px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    text-align: center;
+    /* Removed margin: auto; as flexbox on body handles centering now */
+}
+
+.form-container h2 {
+    margin-bottom: 25px;
+    color: #333;
+    font-weight: 600;
+}
+
+/* Form Elements - unchanged */
+.form-group { margin-bottom: 15px; text-align: left; }
+.form-group label { display: block; margin-bottom: 5px; font-weight: 500; color: #555; }
+.form-group input[type="text"],
+.form-group input[type="email"],
+.form-group input[type="password"],
+.form-group input[type="number"],
+.form-group select { width: 100%; padding: 10px 12px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; transition: border-color 0.3s ease, box-shadow 0.3s ease; }
+.form-group input:focus,
+.form-group select:focus { border-color: #FF4500; outline: none; box-shadow: 0 0 5px rgba(255, 69, 0, 0.5); }
+
+/* Vibrant Button Styling - unchanged */
+.btn-vibrant { background: linear-gradient(45deg, #ff6b6b, #ff4500); color: white; padding: 12px 25px; border: none; border-radius: 25px; cursor: pointer; font-size: 1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; display: inline-block; margin-top: 15px; width: 100%; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1); transition: transform 0.2s ease, box-shadow 0.3s ease, background 0.3s ease; }
+.btn-vibrant:hover { background: linear-gradient(45deg, #ff4500, #ff6b6b); transform: translateY(-2px); box-shadow: 0 6px 15px 5px rgba(0, 0, 0, 0.4); }
+.btn-vibrant:active { transform: translateY(0px); box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); }
+
+/* Validation Error Styling - unchanged */
+.error-message { color: #dc3545; font-size: 0.85em; margin-top: 3px; display: block; }
+
+/* Link styling - unchanged */
+.form-link { display: block; margin-top: 20px; font-size: 0.9em; }
+.form-link a { color: #ff4500; text-decoration: none; font-weight: 500; }
+.form-link a:hover { text-decoration: underline; }
+
+/* Responsive adjustments */
+@media (max-width: 500px) {
+    /* Keep form adjustments */
+    .form-container {
+        padding: 20px 25px;
+        max-width: 90%;
+    }
+    /* Modify body adjustment ONLY for login/register */
+    body.bg-login-register {
+        align-items: flex-start; /* Align form to top on small screens */
+        padding-top: 5vh; /* Add some padding top */
+    }
+}

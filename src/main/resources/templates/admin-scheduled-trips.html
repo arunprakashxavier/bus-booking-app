@@ -1,0 +1,263 @@
+<!--admin-scheduled-trips.html-->
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin - Manage Scheduled Trips</title>
+  <link rel="icon" type="image/png" th:href="@{/images/favicon.png}">
+  <link rel="stylesheet" th:href="@{/css/style.css}">
+  <style>
+    nav { background-color: rgba(0,0,0,0.75); padding: 10px 30px; color: white; overflow: hidden; position: sticky; top: 0; z-index: 1000; }
+    nav span, nav a { line-height: 30px; color: white; text-decoration: none; vertical-align: middle; }
+    nav span { font-w
+    eight: bold; font-size: 1.2em; }
+    nav a.nav-link { margin-left: 25px; }
+    nav a#logoutLink { float: right; }
+    nav a:hover { text-decoration: underline; }
+
+    .content-box { background-color: rgba(255, 255, 255, 0.9); padding: 25px 35px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.15); margin: 40px auto; max-width: 1400px; /* Wider table */ overflow-x: auto; color: #333; }
+    .page-title { color: #343a40; text-align: center; margin-bottom: 20px; font-weight: 700; }
+    .controls-bar { margin-bottom: 20px; min-height: 35px; text-align: left; }
+    .content-box table { width: 100%; border-collapse: collapse; }
+    .content-box th, .content-box td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; vertical-align: middle; white-space: normal; }
+    .content-box th { background-color: #e9ecef; color: #495057; font-weight: 600; white-space: nowrap; } /* Keep headers nowrap */
+    .content-box tr:nth-child(even){background-color: #f8f9fa;}
+    .content-box tr:hover {background-color: #dee2e6;}
+
+    .id-column { width: 60px; text-align: center; }
+    .actions-column { width: 150px; text-align: center; }
+    th.id-column, th.actions-column { text-align: center; }
+
+    .add-btn { margin-bottom: 0; margin-top: 0; padding: 4px 10px; font-size: 0.85em; text-transform: none; border-radius: 5px; width: auto; display: inline-block; }
+    /* Fixed width action buttons */
+    .action-btn { margin: 2px; padding: 4px 0; font-size: 0.8em; border-radius: 4px; text-decoration: none; display: inline-block; color: white; border: none; cursor: pointer; vertical-align: middle; text-align: center; width: 65px; box-sizing: border-box; }
+    .edit-btn-color { background: linear-gradient(45deg, #ffc107, #ff9800); }
+    .delete-btn-color { background: linear-gradient(45deg, #f44336, #d32f2f); }
+
+    #apiMessage { text-align: center; padding: 10px; margin-bottom: 15px; border-radius: 5px; display: none; font-weight: bold; }
+    #apiMessage.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    #apiMessage.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+  </style>
+</head>
+<body class="bg-admin">
+
+<nav>
+  <span>BusApp Admin</span>
+  <a href="/admin/dashboard" class="nav-link">Admin Home</a>
+  <a href="/admin/buses" class="nav-link">Manage Buses</a>
+  <a href="/admin/routes" class="nav-link">Manage Routes</a>
+  <a href="/admin/scheduled-trips" class="nav-link">Manage Trips</a>
+  <a href="#" id="logoutLink">Logout</a>
+</nav>
+
+<div class="content-box">
+  <h2 class="page-title">Manage Scheduled Trips</h2>
+  <div id="apiMessage"></div>
+  <div class="controls-bar">
+    <a th:href="@{/admin/scheduled-trips/add}" class="btn-vibrant add-btn">Schedule New Trip</a>
+  </div>
+  <table>
+    <thead>
+    <tr>
+      <th class="id-column">ID</th>
+      <th>Bus (Number / Operator)</th>
+      <th>Route (Origin -> Destination)</th>
+      <th>Dep. Date</th>
+      <th>Dep. Time</th>
+      <th>Arr. Time</th>
+      <th>Fare</th>
+      <th>Avail. Seats</th>
+      <th class="actions-column">Actions</th>
+    </tr>
+    </thead>
+    <tbody id="tripTableBody">
+    <tr><td colspan="9" style="text-align: center;">Loading scheduled trips...</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+  const tripsApiUrl = '/api/admin/scheduled-trips'; // API URL for trips
+
+  // --- Reusable Functions ---
+  function showApiMessage(message, isError = false) {
+    const msgDiv = document.getElementById('apiMessage');
+    if (!msgDiv) return;
+    msgDiv.textContent = message;
+    msgDiv.className = isError ? 'error' : 'success';
+    msgDiv.style.display = 'block';
+    if(!isError) { // Auto-hide success messages
+      setTimeout(() => { if(msgDiv) msgDiv.style.display = 'none'; }, 5000);
+    }
+  }
+  function checkAdminAuth() {
+    const token = localStorage.getItem('authToken');
+    const rolesString = localStorage.getItem('userRoles');
+    let roles = [];
+    try { roles = rolesString ? JSON.parse(rolesString) : []; } catch(e) { console.error("Error parsing roles", e); }
+    if (!token || !roles.includes('ROLE_ADMIN')) {
+      console.log("Admin access required. Redirecting.");
+      localStorage.clear(); window.location.replace('/login'); return null;
+    } return token;
+  }
+  function setupLogout() {
+    const logoutLink = document.getElementById('logoutLink');
+    if (logoutLink) {
+      logoutLink.removeEventListener('click', handleLogout);
+      logoutLink.addEventListener('click', handleLogout);
+    }
+  }
+  function handleLogout(event) {
+    event.preventDefault();
+    localStorage.clear();
+    console.log("Admin logged out, redirecting to login.");
+    window.location.href = '/login';
+  }
+
+  // --- Trip Specific Functions ---
+  async function fetchAndDisplayTrips(token) {
+    console.log("fetchAndDisplayTrips called");
+    const tableBody = document.getElementById('tripTableBody');
+    if (!tableBody) { console.error("tripTableBody not found!"); return; }
+    tableBody.innerHTML = '<tr><td colspan="9" style="text-align: center;">Loading scheduled trips...</td></tr>';
+    try {
+      console.log("Fetching trips from:", tripsApiUrl);
+      const response = await fetch(tripsApiUrl, { method: 'GET', headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } });
+      console.log("Fetch response status:", response.status);
+      if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+      const trips = await response.json();
+      console.log("Trips data received:", trips.length);
+      displayTrips(trips);
+    } catch (error) {
+      console.error('Error fetching trips:', error);
+      if(tableBody) tableBody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: red;">Error loading trips.</td></tr>';
+      showApiMessage(`Error loading trips: ${error.message}`, true);
+    }
+    console.log("fetchAndDisplayTrips finished");
+  }
+
+  function displayTrips(trips) {
+    console.log("displayTrips called");
+    const tableBody = document.getElementById('tripTableBody');
+    if (!tableBody) return;
+    tableBody.innerHTML = '';
+    if (!trips || trips.length === 0) {
+      tableBody.innerHTML = '<tr><td colspan="9" style="text-align: center;">No scheduled trips found. Add one!</td></tr>'; return;
+    }
+    console.log(`Displaying ${trips.length} trips...`);
+    trips.forEach(trip => {
+      const row = tableBody.insertRow();
+
+      // Access nested data with null checks
+      const busInfo = trip.bus ? `${trip.bus.busNumber} / ${trip.bus.operatorName}` : 'N/A';
+      const routeInfo = trip.route ? `${trip.route.origin} -> ${trip.route.destination}` : 'N/A';
+      // Basic Date/Time formatting (can be enhanced)
+      const departureDate = trip.departureDate ? new Date(trip.departureDate).toLocaleDateString() : 'N/A';
+      const departureTime = trip.departureTime ? trip.departureTime.substring(0, 5) : 'N/A'; // HH:mm
+      const arrivalTime = trip.arrivalTime ? trip.arrivalTime.substring(0, 5) : 'N/A'; // HH:mm
+      const fare = trip.fare != null ? `₹${trip.fare.toFixed(2)}` : 'N/A'; // Add currency
+
+      row.insertCell().className = 'id-column'; row.cells[0].textContent = trip.id;
+      row.insertCell().textContent = busInfo;
+      row.insertCell().textContent = routeInfo;
+      row.insertCell().textContent = departureDate;
+      row.insertCell().textContent = departureTime;
+      row.insertCell().textContent = arrivalTime;
+      row.insertCell().textContent = fare;
+      row.insertCell().textContent = trip.availableSeats != null ? trip.availableSeats : 'N/A';
+
+      const actionsCell = row.insertCell();
+      actionsCell.className = 'actions-column';
+
+      const editLink = document.createElement('a');
+      editLink.href = `/admin/scheduled-trips/edit/${trip.id}`;
+      editLink.textContent = 'Edit';
+      editLink.className = 'btn-vibrant action-btn edit-btn-color';
+      actionsCell.appendChild(editLink);
+
+      const deleteButton = document.createElement('button');
+      deleteButton.textContent = 'Delete';
+      deleteButton.className = 'btn-vibrant action-btn delete-btn-color delete-trip-btn'; // Unique class
+      deleteButton.dataset.id = trip.id;
+      deleteButton.dataset.description = `Trip on ${trip.departureDate} (${routeInfo})`;
+      actionsCell.appendChild(deleteButton);
+    });
+    addDeleteTripListeners();
+    console.log("displayTrips finished");
+  }
+
+  function addDeleteTripListeners() {
+    console.log("addDeleteTripListeners called");
+    const deleteButtons = document.querySelectorAll('button.delete-trip-btn'); // Use specific class
+    console.log(`Found ${deleteButtons.length} delete buttons to attach listeners to.`);
+    deleteButtons.forEach(button => {
+      button.removeEventListener('click', handleDeleteTripClick);
+      button.addEventListener('click', handleDeleteTripClick);
+    });
+    console.log("addDeleteTripListeners finished");
+  }
+
+  async function handleDeleteTripClick(event) {
+    console.log("handleDeleteTripClick called!");
+    const button = event.target;
+    const tripId = button.dataset.id;
+    const tripDesc = button.dataset.description;
+    console.log(`Delete clicked for Trip ID: ${tripId}, Description: ${tripDesc}`);
+
+    const token = checkAdminAuth();
+    if (!token) return;
+
+    if (confirm(`Are you sure you want to delete trip "${tripDesc}" (ID: ${tripId})?`)) {
+      console.log("Delete confirmed by user.");
+      try {
+        console.log(`Sending DELETE request to: ${tripsApiUrl}/${tripId}`);
+        const response = await fetch(`${tripsApiUrl}/${tripId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        console.log("Delete API response status:", response.status);
+        if (response.ok) {
+          console.log("Delete successful, removing row.");
+          showApiMessage(`Scheduled Trip (ID: ${tripId}) deleted successfully.`, false);
+          button.closest('tr').remove();
+          const tableBody = document.getElementById('tripTableBody');
+          if (!tableBody.hasChildNodes() || tableBody.innerHTML.trim() === ''){
+            tableBody.innerHTML = '<tr><td colspan="9" style="text-align: center;">No scheduled trips found. Add one!</td></tr>';
+          }
+        } else {
+          const errorText = await response.text();
+          console.error(`Delete API failed: ${response.status} - ${errorText}`);
+          throw new Error(errorText || `Failed to delete trip. Status: ${response.status}`);
+        }
+      } catch (error) {
+        console.error('Error during trip delete fetch operation:', error);
+        showApiMessage(`Error deleting trip: ${error.message}`, true);
+      }
+    } else {
+      console.log("Delete cancelled by user.");
+    }
+  }
+
+  // --- Initial Actions on Page Load ---
+  document.addEventListener('DOMContentLoaded', () => {
+    console.log("DOMContentLoaded event fired for Admin Trips page");
+    const adminToken = checkAdminAuth();
+    if (adminToken) {
+      // Check for success message from sessionStorage
+      const successMsg = sessionStorage.getItem('apiSuccessMessage');
+      if (successMsg) {
+        showApiMessage(successMsg, false);
+        sessionStorage.removeItem('apiSuccessMessage'); // Clear after showing
+      }
+      console.log("Auth successful, fetching trips and setting up logout.");
+      fetchAndDisplayTrips(adminToken); // Call the trip fetch function
+      setupLogout();
+    } else {
+      console.log("Auth failed on load, redirect should have happened.");
+    }
+    console.log("DOMContentLoaded handler finished.");
+  });
+</script>
+</body>
+</html>

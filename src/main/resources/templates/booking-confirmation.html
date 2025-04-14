@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirm Booking - Bus Booking</title>
+    <link rel="icon" type="image/png" th:href="@{/images/favicon.png}">
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <style>
+        /* Basic Navbar styling */
+        nav { background-color: rgba(0,0,0,0.7); padding: 10px 30px; color: white; overflow: hidden; position: sticky; top: 0; z-index: 1000;}
+        nav span, nav a { line-height: 30px; color: white; text-decoration: none; vertical-align: middle; }
+        nav span { font-weight: bold; font-size: 1.1em; }
+        nav a.nav-link { margin-left: 20px; }
+        nav a#logoutLink { float: right; }
+        nav a:hover { text-decoration: underline; }
+
+        /* Content Box */
+        .content-box { background-color: rgba(255, 255, 255, 0.92); padding: 25px 35px; border-radius: 15px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15); margin: 30px auto; max-width: 950px; color: #333; }
+        .content-box h2 { text-align: center; margin-bottom: 25px; }
+
+        /* Layout */
+        .booking-layout { display: flex; flex-wrap: wrap; gap: 30px; }
+        .summary-section { flex: 1; min-width: 280px; }
+        .passenger-section { flex: 2; min-width: 400px; }
+
+        /* Summary Box */
+        .summary-box, .passenger-box { padding: 20px; border: 1px solid #ddd; border-radius: 8px; background-color: #f9f9f9; margin-bottom: 15px;}
+        .summary-box h4, .passenger-box h4 { margin-top: 0; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; color: #333;}
+        .summary-box p { margin: 8px 0; font-size: 1em; }
+        .summary-box strong { color: #111; }
+        #summaryFare { font-size: 1.3em; font-weight: bold; color: #0056b3; margin-top: 10px; display: block; }
+
+        /* Passenger Form Fields */
+        .passenger-box { margin-bottom: 20px; }
+        .passenger-form-fields { margin-bottom: 10px; }
+        .passenger-form-fields label { font-weight: 500; display: block; margin-bottom: 5px; font-size: 0.9em; color: #555;}
+        .passenger-form-fields input, .passenger-form-fields select { width: 100%; padding: 9px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; margin-bottom: 10px; font-size: 0.95em;}
+
+        /* Buttons */
+        .button-group { display: flex; justify-content: center; gap: 15px; margin-top: 30px; }
+        .btn-vibrant { padding: 10px 25px; font-size: 1em; font-weight: bold; border-radius: 6px; cursor: pointer; border: none; color: white; text-align: center; transition: 0.3s ease; text-transform: uppercase; letter-spacing: 0.5px; display: inline-block; width: auto; text-decoration: none; }
+        .btn-confirm { background: linear-gradient(45deg, #28a745, #218838); } /* Green */
+        .btn-confirm:hover { background: linear-gradient(45deg, #218838, #28a745); transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        .btn-confirm:disabled { background: #ccc !important; cursor: not-allowed; opacity: 0.7; transform: none !important; box-shadow: none !important;}
+        .btn-confirm.loading { cursor: wait; opacity: 0.8; }
+        /* Added Back Button Style */
+        .btn-back { background-color: #6c757d; }
+        .btn-back:hover { background-color: #5a6268; transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+
+
+        /* API Message */
+        #apiMessage { text-align:center; margin: 15px 0; font-weight: bold; padding: 10px; border-radius: 5px; display: none; }
+        #apiMessage.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        #apiMessage.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+
+    </style>
+    <script>
+        const tokenOnLoad = localStorage.getItem('authToken');
+        if (!tokenOnLoad) { window.location.replace('/login'); }
+    </script>
+</head>
+<body class="bg-user">
+
+<nav>
+    <span>BusApp</span>
+    <a href="/dashboard" class="nav-link">Dashboard</a>
+    <a href="/booking-history" class="nav-link">My Bookings</a> <a href="/profile" class="nav-link">Profile</a> <a href="#" id="logoutLink">Logout</a>
+</nav>
+
+<div class="content-box">
+    <h2>Confirm Your Booking</h2>
+    <div id="apiMessage"></div>
+    <div class="booking-layout">
+        <div class="summary-section">
+            <div class="summary-box">
+                <h4>Trip Summary</h4>
+                <div id="tripSummaryDetails"><p>Loading summary...</p></div>
+                <hr>
+                <p><strong>Selected Seats:</strong> <span id="summarySeats">N/A</span></p>
+                <p><strong>Total Fare:</strong> <span id="summaryFare">N/A</span></p>
+            </div>
+            <div class="summary-box">
+                <h4>Payment Summary</h4>
+                <p>Total Amount Due: <strong id="paymentTotalFare">N/A</strong></p>
+                <p><i>You will be redirected to payment after confirming details.</i></p>
+            </div>
+        </div>
+
+        <div class="passenger-section">
+            <h4>Enter Passenger Details</h4>
+            <form id="passengerForm">
+                <div id="passengerFormsContainer">
+                    <p>Loading passenger forms...</p>
+                </div>
+                <div class="button-group">
+                    <a href="#" id="backButton" class="btn-vibrant btn-back">Back to Seats</a>
+                    <button type="submit" id="confirmBookingBtn" class="btn-vibrant btn-confirm">Confirm & Proceed to Payment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- Helper Functions ---
+    function checkUserAuth() { const token = localStorage.getItem('authToken'); if (!token) { window.location.replace('/login'); return null; } return token; }
+    function setupLogout() { const logoutLink = document.getElementById('logoutLink'); if (logoutLink) { logoutLink.removeEventListener('click', handleLogout); logoutLink.addEventListener('click', handleLogout); } }
+    function handleLogout(event) { event.preventDefault(); localStorage.clear(); window.location.href = '/login'; }
+    function showApiMessage(message, isError = false) { const msgDiv = document.getElementById('apiMessage'); if (!msgDiv) return; msgDiv.textContent = message; msgDiv.className = isError ? 'error' : 'success'; msgDiv.style.display = 'block'; /* Don't auto-hide errors */ }
+
+    // --- Page Load Logic ---
+    document.addEventListener('DOMContentLoaded', async () => {
+        const token = checkUserAuth();
+        if (!token) return;
+        setupLogout();
+
+        const tripId = sessionStorage.getItem('selectedTripId');
+        const selectedSeatsString = sessionStorage.getItem('selectedSeats');
+        const calculatedFare = sessionStorage.getItem('calculatedFare');
+        const backButton = document.getElementById('backButton');
+
+        if (!tripId || !selectedSeatsString || !calculatedFare || !backButton) {
+            console.error("Booking details missing from session storage or Back button not found.");
+            showApiMessage("Error: Booking details missing. Please start search again.", true);
+            document.getElementById('passengerFormsContainer').innerHTML = '';
+            const confirmBtn = document.getElementById('confirmBookingBtn');
+            if(confirmBtn) confirmBtn.disabled = true;
+            return;
+        }
+
+        const selectedSeats = JSON.parse(selectedSeatsString);
+        backButton.href = `/booking/trip/${tripId}/select-seats`;
+        document.getElementById('summarySeats').textContent = selectedSeats.join(', ');
+        const fareValue = parseFloat(calculatedFare);
+        document.getElementById('summaryFare').textContent = `₹${fareValue.toFixed(2)}`;
+        document.getElementById('paymentTotalFare').textContent = `₹${fareValue.toFixed(2)}`;
+
+        await fetchTripDetails(tripId, token);
+        generatePassengerForms(selectedSeats);
+        addBookingSubmitListener(tripId, selectedSeats, token);
+    });
+
+    // --- Fetch Trip Details Function ---
+    async function fetchTripDetails(tripId, token) {
+        const tripSummaryDiv = document.getElementById('tripSummaryDetails');
+        tripSummaryDiv.innerHTML = '<p>Loading summary...</p>';
+        try {
+            const tripApiUrl = `/api/trips/${tripId}`;
+            const response = await fetch(tripApiUrl, { headers: { 'Accept': 'application/json', 'Authorization': `Bearer ${token}` } });
+            if (!response.ok) { let errorText = "Could not fetch trip details"; try { const errData = await response.json(); errorText = errData.message || errData.error || errorText; } catch(e){} throw new Error(errorText); }
+            const tripData = await response.json();
+            const busInfo = tripData.bus ? `${tripData.bus.operatorName} (${tripData.bus.busType})` : 'N/A';
+            const routeInfo = tripData.route ? `${tripData.route.origin} -> ${tripData.route.destination}` : 'N/A';
+            const depTime = tripData.departureTime ? tripData.departureTime.substring(0, 5) : '--:--';
+            const arrTime = tripData.arrivalTime ? tripData.arrivalTime.substring(0, 5) : '--:--';
+            tripSummaryDiv.innerHTML = `<p><strong>Bus:</strong> ${busInfo}</p><p><strong>Route:</strong> ${routeInfo}</p><p><strong>Date:</strong> ${tripData.departureDate}</p><p><strong>Time:</strong> ${depTime} - ${arrTime}</p>`;
+        } catch(error) {
+            console.error("Error fetching trip summary:", error);
+            tripSummaryDiv.innerHTML = `<p style="color: red;">Could not load trip summary: ${error.message}</p>`;
+            const confirmBtn = document.getElementById('confirmBookingBtn');
+            if(confirmBtn) confirmBtn.disabled = true;
+        }
+    }
+
+    // --- Generate Passenger Input Forms ---
+    function generatePassengerForms(selectedSeatsArray) {
+        const formContainer = document.getElementById('passengerFormsContainer');
+        formContainer.innerHTML = '';
+        selectedSeatsArray.forEach((seatNum, index) => {
+            const passengerBox = document.createElement('div');
+            passengerBox.className = 'passenger-box';
+            passengerBox.innerHTML = `
+                      <h4>Passenger ${index + 1} (Seat ${seatNum})</h4>
+                      <div class="passenger-form-fields">
+                          <label for="passengerName${index}">Name:</label>
+                          <input type="text" id="passengerName${index}" name="passengerName" data-index="${index}" placeholder="Full Name" required>
+                          <label for="passengerAge${index}">Age:</label>
+                          <input type="number" id="passengerAge${index}" name="passengerAge" data-index="${index}" min="1" max="120" placeholder="Age" required>
+                          <label for="passengerGender${index}">Gender:</label>
+                          <select id="passengerGender${index}" name="passengerGender" data-index="${index}" required>
+                              <option value="" disabled selected>Select</option>
+                              <option value="Male">Male</option><option value="Female">Female</option><option value="Other">Other</option>
+                          </select>
+                      </div>`;
+            formContainer.appendChild(passengerBox);
+        });
+    }
+
+    // --- Attach Submit Listener (MODIFIED) ---
+    function addBookingSubmitListener(tripId, selectedSeatsArray, token) {
+        const passengerForm = document.getElementById('passengerForm');
+        const confirmBtn = document.getElementById('confirmBookingBtn');
+        const numPassengers = selectedSeatsArray.length;
+
+        if(passengerForm && confirmBtn) {
+            passengerForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                const currentToken = checkUserAuth();
+                if (!currentToken) return;
+
+                confirmBtn.disabled = true; confirmBtn.textContent = 'Processing...'; confirmBtn.classList.add('loading');
+                showApiMessage('', false); // Clear previous messages
+
+                const passengersData = []; let formIsValid = true;
+                for (let i = 0; i < numPassengers; i++) {
+                    const nameInput = document.getElementById(`passengerName${i}`);
+                    const ageInput = document.getElementById(`passengerAge${i}`);
+                    const genderInput = document.getElementById(`passengerGender${i}`);
+                    if (!nameInput || !ageInput || !genderInput || !nameInput.value.trim() || !ageInput.value || !genderInput.value) { formIsValid = false; break; }
+                    passengersData.push({ name: nameInput.value.trim(), age: parseInt(ageInput.value, 10), gender: genderInput.value });
+                }
+
+                if (!formIsValid) {
+                    showApiMessage('Please fill in valid details for all passengers.', true);
+                    confirmBtn.disabled = false; confirmBtn.textContent = 'Confirm & Proceed to Payment'; confirmBtn.classList.remove('loading');
+                    return;
+                }
+
+                const bookingPayload = { tripId: tripId, selectedSeats: selectedSeatsArray, passengers: passengersData };
+                console.log("Submitting final booking payload:", bookingPayload);
+                const bookingApiUrl = '/api/booking';
+
+                try {
+                    const response = await fetch(bookingApiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentToken}` }, body: JSON.stringify(bookingPayload) });
+
+                    if (response.ok || response.status === 201) {
+                        const bookingResult = await response.json();
+                        console.log("Pending Booking successful:", bookingResult);
+                        const bookingId = bookingResult.bookingId;
+
+                        // Clear sensitive booking info from sessionStorage
+                        sessionStorage.removeItem('selectedSeats');
+                        sessionStorage.removeItem('calculatedFare');
+                        sessionStorage.removeItem('baseFarePerSeat');
+                        // Keep tripId temporarily if needed? Maybe not.
+
+                        // **** REDIRECT TO PAYMENT PAGE ****
+                        console.log(`Redirecting to payment page for booking ID: ${bookingId}`);
+                        window.location.href = `/payment/${bookingId}`; // Redirect to the payment page with booking ID
+
+                    } else {
+                        // Handle booking creation failure
+                        const errorText = await response.text(); let detailError = errorText; try { const errorJson = JSON.parse(errorText); detailError = errorJson.message || errorJson.error || errorText; } catch(e) {}
+                        throw new Error(detailError || `Booking creation failed. Status: ${response.status}`);
+                    }
+                } catch(error) {
+                    // Handle fetch error or booking creation failure
+                    console.error("Error creating pending booking:", error);
+                    showApiMessage(`Booking Failed: ${error.message}`, true);
+                    confirmBtn.disabled = false; confirmBtn.textContent = 'Confirm & Proceed to Payment'; confirmBtn.classList.remove('loading');
+                    // TODO: If booking fails AFTER seats were locked, ideally release locked seats via API?
+                    // This is tricky. The backend Seat Locking Expiry task is the main fallback.
+                    // Optionally add an API endpoint to explicitly unlock seats by tripId/userId if user abandons here.
+                }
+            });
+        }
+    }
+</script>
+</body>
+</html>

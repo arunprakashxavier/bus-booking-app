@@ -1,0 +1,221 @@
+<!--admin-routes.html-->
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Manage Routes</title>
+    <link rel="icon" type="image/png" th:href="@{/images/favicon.png}">
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <style>
+        /* Navbar styling */
+        nav { background-color: rgba(0,0,0,0.75); padding: 10px 30px; color: white; overflow: hidden; position: sticky; top: 0; z-index: 1000; }
+        nav span, nav a { line-height: 30px; color: white; text-decoration: none; vertical-align: middle; }
+        nav span { font-weight: bold; font-size: 1.2em; }
+        nav a.nav-link { margin-left: 25px; }
+        nav a#logoutLink { float: right; }
+        nav a:hover { text-decoration: underline; }
+
+        /* Content Box Styling */
+        .content-box { background-color: rgba(255, 255, 255, 0.9); padding: 25px 35px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.15); margin: 40px auto; max-width: 900px; overflow-x: auto; color: #333; }
+        .page-title { color: #343a40; text-align: center; margin-bottom: 20px; font-weight: 700; }
+
+        /* Controls Bar */
+        .controls-bar { margin-bottom: 20px; min-height: 35px; text-align: left; }
+
+        /* Table styling */
+        .content-box table { width: 100%; border-collapse: collapse; /* table-layout: fixed; */ }
+        .content-box th, .content-box td { border: 1px solid #ddd; padding: 10px 14px; text-align: left; vertical-align: middle; word-wrap: break-word; }
+        .content-box th { background-color: #e9ecef; color: #495057; font-weight: 600; }
+        .content-box tr:nth-child(even){background-color: #f8f9fa;}
+        .content-box tr:hover {background-color: #dee2e6;}
+
+        /* Column Widths & Alignment */
+        .id-column { width: 80px; text-align: center; }
+        .actions-column { width: 170px; text-align: center; }
+        th.id-column, th.actions-column { text-align: center; }
+
+        /* Buttons Styling */
+        .add-btn { margin-bottom: 0; margin-top: 0; padding: 4px 10px; font-size: 0.85em; text-transform: none; border-radius: 5px; width: auto; display: inline-block; }
+        /* Fixed Width Action Buttons */
+        .action-btn { margin: 2px; padding: 4px 0; font-size: 0.8em; border-radius: 4px; text-decoration: none; display: inline-block; color: white; border: none; cursor: pointer; vertical-align: middle; text-align: center; width: 65px; box-sizing: border-box; }
+        .edit-btn-color { background: linear-gradient(45deg, #ffc107, #ff9800); }
+        .delete-btn-color { background: linear-gradient(45deg, #f44336, #d32f2f); }
+
+        /* Feedback message styling */
+        #apiMessage { text-align: center; padding: 10px; margin-bottom: 15px; border-radius: 5px; display: none; font-weight: bold; }
+        #apiMessage.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        #apiMessage.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+
+    </style>
+</head>
+<body class="bg-admin">
+
+<nav>
+    <span>BusApp Admin</span>
+    <a href="/admin/dashboard" class="nav-link">Admin Home</a>
+    <a href="/admin/buses" class="nav-link">Manage Buses</a>
+    <a href="/admin/routes" class="nav-link">Manage Routes</a>
+    <a href="/admin/scheduled-trips" class="nav-link">Manage Trips</a>
+    <a href="/admin/bookings" class="nav-link">View Bookings</a> <a href="#" id="logoutLink">Logout</a>
+</nav>
+
+<div class="content-box">
+    <h2 class="page-title">Manage Routes</h2>
+    <div id="apiMessage"></div>
+    <div class="controls-bar">
+        <a th:href="@{/admin/routes/add}" class="btn-vibrant add-btn">Add New Route</a>
+    </div>
+    <table>
+        <thead>
+        <tr>
+            <th class="id-column">ID</th>
+            <th class="origin-column">Origin</th>
+            <th class="destination-column">Destination</th>
+            <th class="actions-column">Actions</th>
+        </tr>
+        </thead>
+        <tbody id="routeTableBody">
+        <tr><td colspan="4" style="text-align: center;">Loading routes...</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+    // --- All JS functions remain exactly the same as the previous version ---
+    const routesApiUrl = '/api/admin/routes';
+    function showApiMessage(message, isError = false) { /* ... */ }
+    function checkAdminAuth() { /* ... */ }
+    async function fetchAndDisplayRoutes(token) { /* ... */ }
+    function displayRoutes(routes) { /* ... */ }
+    function addDeleteRouteListeners() { /* ... */ }
+    async function handleDeleteRouteClick(event) { /* ... */ }
+    function setupLogout() { /* ... */ }
+    function handleLogout(event) { /* ... */ }
+    document.addEventListener('DOMContentLoaded', () => { /* ... */ });
+    // --- Full JS code ---
+    function showApiMessage(message, isError = false) {
+        const msgDiv = document.getElementById('apiMessage');
+        if (!msgDiv) return;
+        msgDiv.textContent = message;
+        msgDiv.className = isError ? 'error' : 'success';
+        msgDiv.style.display = 'block';
+        const successMsg = sessionStorage.getItem('apiSuccessMessage');
+        if (successMsg) {
+            showApiMessage(successMsg, false);
+            sessionStorage.removeItem('apiSuccessMessage'); // Clear after showing
+        }
+        if(!isError) {
+            setTimeout(() => { if(msgDiv) msgDiv.style.display = 'none'; }, 5000);
+        }
+    }
+    function checkAdminAuth() {
+        const token = localStorage.getItem('authToken');
+        const rolesString = localStorage.getItem('userRoles');
+        let roles = [];
+        try { roles = rolesString ? JSON.parse(rolesString) : []; } catch(e) { console.error("Error parsing roles", e); }
+        if (!token || !roles.includes('ROLE_ADMIN')) {
+            console.log("Admin access required. Redirecting.");
+            localStorage.clear(); window.location.replace('/login'); return null;
+        } return token;
+    }
+    async function fetchAndDisplayRoutes(token) {
+        const tableBody = document.getElementById('routeTableBody');
+        if (!tableBody) return;
+        tableBody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Loading routes...</td></tr>';
+        try {
+            const response = await fetch(routesApiUrl, { method: 'GET', headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } });
+            if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+            const routes = await response.json();
+            displayRoutes(routes);
+        } catch (error) {
+            console.error('Error fetching routes:', error);
+            if(tableBody) tableBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: red;">Error loading routes.</td></tr>';
+            showApiMessage(`Error loading routes: ${error.message}`, true);
+        }
+    }
+    function displayRoutes(routes) {
+        const tableBody = document.getElementById('routeTableBody');
+        if (!tableBody) return;
+        tableBody.innerHTML = '';
+        if (!routes || routes.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="4" style="text-align: center;">No routes found. Add one!</td></tr>'; return;
+        }
+        routes.forEach(route => {
+            const row = tableBody.insertRow();
+            row.insertCell().className = 'id-column'; row.cells[0].textContent = route.id;
+            row.insertCell().className = 'origin-column'; row.cells[1].textContent = route.origin;
+            row.insertCell().className = 'destination-column'; row.cells[2].textContent = route.destination;
+            const actionsCell = row.insertCell(); actionsCell.className = 'actions-column';
+            const editLink = document.createElement('a');
+            editLink.href = `/admin/routes/edit/${route.id}`; editLink.textContent = 'Edit'; editLink.className = 'btn-vibrant action-btn edit-btn-color'; actionsCell.appendChild(editLink);
+            const deleteButton = document.createElement('button');
+            deleteButton.textContent = 'Delete'; deleteButton.className = 'btn-vibrant action-btn delete-btn-color delete-route-btn';
+            deleteButton.dataset.id = route.id; deleteButton.dataset.origin = route.origin; deleteButton.dataset.destination = route.destination; actionsCell.appendChild(deleteButton);
+        });
+        addDeleteRouteListeners();
+    }
+    function addDeleteRouteListeners() {
+        const deleteButtons = document.querySelectorAll('button.delete-route-btn');
+        deleteButtons.forEach(button => {
+            button.removeEventListener('click', handleDeleteRouteClick);
+            button.addEventListener('click', handleDeleteRouteClick);
+        });
+    }
+    async function handleDeleteRouteClick(event) {
+        const button = event.target;
+        const routeId = button.dataset.id;
+        const origin = button.dataset.origin;
+        const destination = button.dataset.destination;
+        const routeDesc = `${origin} -> ${destination}`;
+        const token = checkAdminAuth();
+        if (!token) return;
+        if (confirm(`Are you sure you want to delete route "${routeDesc}" (ID: ${routeId})? \nNote: This might fail if trips are scheduled on this route.`)) {
+            try {
+                const response = await fetch(`${routesApiUrl}/${routeId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+                if (response.ok) {
+                    showApiMessage(`Route "${routeDesc}" deleted successfully.`, false);
+                    button.closest('tr').remove();
+                    const tableBody = document.getElementById('routeTableBody');
+                    if (!tableBody.hasChildNodes() || tableBody.innerHTML.trim() === ''){
+                        tableBody.innerHTML = '<tr><td colspan="4" style="text-align: center;">No routes found. Add one!</td></tr>';
+                    }
+                } else {
+                    const errorText = await response.text(); throw new Error(errorText || `Failed to delete route. Status: ${response.status}`);
+                }
+            } catch (error) {
+                console.error('Error during route delete fetch operation:', error);
+                showApiMessage(`Error deleting route: ${error.message}`, true);
+            }
+        }
+    }
+    function setupLogout() {
+        const logoutLink = document.getElementById('logoutLink');
+        if (logoutLink) {
+            logoutLink.removeEventListener('click', handleLogout);
+            logoutLink.addEventListener('click', handleLogout);
+        }
+    }
+    function handleLogout(event) {
+        event.preventDefault();
+        localStorage.clear();
+        console.log("Admin logged out, redirecting to login.");
+        window.location.href = '/login';
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const adminToken = checkAdminAuth();
+        if (adminToken) {
+            const successMsg = sessionStorage.getItem('apiSuccessMessage'); // Check sessionStorage
+            if (successMsg) {
+                showApiMessage(successMsg, false);
+                sessionStorage.removeItem('apiSuccessMessage');
+            }
+            fetchAndDisplayRoutes(adminToken);
+            setupLogout();
+        }
+    });
+</script>
+
+</body>
+</html>

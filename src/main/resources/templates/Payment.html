@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Complete Payment - Bus Booking</title>
+  <link rel="icon" type="image/png" th:href="@{/images/favicon.png}">
+  <link rel="stylesheet" th:href="@{/css/style.css}">
+  <script src="https://js.stripe.com/v3/"></script>
+  <style>
+    /* Basic Navbar styling */
+    nav { background-color: rgba(0,0,0,0.7); padding: 10px 30px; color: white; overflow: hidden; position: sticky; top: 0; z-index: 1000;}
+    nav span, nav a { line-height: 30px; color: white; text-decoration: none; vertical-align: middle; }
+    nav span { font-weight: bold; font-size: 1.1em; }
+    nav a.nav-link { margin-left: 20px; }
+    nav a#logoutLink { float: right; }
+    nav a:hover { text-decoration: underline; }
+
+    /* Content Box */
+    .content-box { background-color: rgba(255, 255, 255, 0.92); padding: 25px 35px; border-radius: 15px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15); margin: 30px auto; max-width: 600px; /* Adjust width for payment form */ color: #333; }
+    .content-box h2 { text-align: center; margin-bottom: 25px; }
+
+    /* Payment Form Styling */
+    #payment-form { margin-top: 20px; }
+    #payment-summary { margin-bottom: 20px; text-align: center; font-size: 1.1em; }
+    #payment-summary strong { color: #0056b3; font-size: 1.2em; }
+
+    /* Stripe Element Container */
+    #payment-element { margin-bottom: 20px; padding: 15px; border: 1px solid #ccc; border-radius: 5px; background-color: white;}
+
+    /* Submit Button */
+    #submit-button { display: block; width: 100%; padding: 12px 20px; margin-top: 20px; font-size: 1.1em; font-weight: bold; border-radius: 6px; cursor: pointer; border: none; color: white; text-align: center; transition: 0.3s ease; text-transform: uppercase; letter-spacing: 0.5px; background: linear-gradient(45deg, #28a745, #218838); /* Green */ }
+    #submit-button:hover:not(:disabled) { background: linear-gradient(45deg, #218838, #28a745); transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+    #submit-button:disabled { background: #ccc !important; cursor: not-allowed; opacity: 0.7; transform: none !important; box-shadow: none !important; }
+    #submit-button .spinner { display: none; width: 20px; height: 20px; border: 3px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-infinite; margin: 0 auto; }
+    #submit-button.processing .spinner { display: inline-block; vertical-align: middle; margin-right: 10px;}
+    #submit-button.processing .button-text { vertical-align: middle; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Payment Message Area */
+    #payment-message { margin-top: 20px; text-align:center; font-weight: bold; padding: 10px; border-radius: 5px; display: none; }
+    #payment-message.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    #payment-message.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+  </style>
+  <script>
+    const tokenOnLoadPayment = localStorage.getItem('authToken');
+    if (!tokenOnLoadPayment) { window.location.replace('/login'); }
+    // Extract bookingId from path for early check if needed, or handle in DOMContentLoaded
+  </script>
+</head>
+<body class="bg-user">
+
+<nav>
+  <span>BusApp</span>
+  <a href="/dashboard" class="nav-link">Dashboard</a>
+  <a href="/booking-history" class="nav-link">My Bookings</a>
+  <a href="/profile" class="nav-link">Profile</a>
+  <a href="#" id="logoutLink">Logout</a>
+</nav>
+
+<div class="content-box">
+  <h2>Complete Your Payment</h2>
+  <div id="payment-summary">Loading payment details...</div>
+  <div id="payment-message"></div> <form id="payment-form">
+  <div id="payment-element"></div>
+
+  <div id="error-message" role="alert" style="color: red; margin-top: 10px;"></div>
+
+  <button id="submit-button" type="submit">
+    <span class="spinner"></span>
+    <span class="button-text">Pay Now</span>
+  </button>
+</form>
+</div>
+
+<script th:inline="javascript">
+  // Passed from WebController
+  const stripePublishableKey = /*[[${stripePublishableKey}]]*/ null;
+  const bookingId = /*[[${bookingId}]]*/ null; // Get bookingId from model
+
+  // --- Reusable Auth/Logout ---
+  function checkUserAuth() { const token = localStorage.getItem('authToken'); if (!token) { window.location.replace('/login'); return null; } return token; }
+  function setupLogout() { const logoutLink = document.getElementById('logoutLink'); if (logoutLink) { logoutLink.removeEventListener('click', handleLogout); logoutLink.addEventListener('click', handleLogout); } }
+  function handleLogout(event) { event.preventDefault(); localStorage.clear(); window.location.href = '/login'; }
+  function showPaymentMessage(message, isError = false) { const msgDiv = document.getElementById('payment-message'); if (!msgDiv) return; msgDiv.textContent = message; msgDiv.className = isError ? 'error' : 'success'; msgDiv.style.display = 'block'; }
+  function setLoading(isLoading) { const button = document.getElementById('submit-button'); if (!button) return; if (isLoading) { button.disabled = true; button.classList.add('processing'); } else { button.disabled = false; button.classList.remove('processing'); } }
+
+  // --- Stripe Initialization and Payment Handling ---
+  let stripe = null;
+  let elements = null;
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    const token = checkUserAuth();
+    if (!token || !stripePublishableKey || !bookingId) {
+      console.error("Auth token, Stripe Key, or Booking ID missing.");
+      showPaymentMessage("Error initializing payment. Please try again later.", true);
+      return;
+    }
+    setupLogout();
+
+    stripe = Stripe(stripePublishableKey);
+
+    // --- Fetch Payment Intent Client Secret ---
+    let clientSecret = null;
+    try {
+      console.log(`Requesting payment intent for booking ID: ${bookingId}`);
+      const response = await fetch('/api/payment/create-intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ bookingId: bookingId }) // Send bookingId in request body
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let detailError = errorText;
+        try { detailError = JSON.parse(errorText).message || detailError; } catch(e){}
+        throw new Error(detailError || `Failed to create payment intent. Status: ${response.status}`);
+      }
+
+      const intentResponse = await response.json();
+      clientSecret = intentResponse.clientSecret;
+      console.log("Client Secret received.");
+
+      // --- Update Payment Summary ---
+      // Ideally, fetch amount securely from backend instead of relying on sessionStorage
+      // For now, just confirm booking ID. We could enhance create-intent response later.
+      const paymentSummaryDiv = document.getElementById('payment-summary');
+      if(paymentSummaryDiv) { paymentSummaryDiv.innerHTML = `Paying for Booking ID: <strong>${bookingId}</strong>`; } // Simplistic summary
+
+    } catch (error) {
+      console.error("Error creating Payment Intent:", error);
+      showPaymentMessage(`Error setting up payment: ${error.message}`, true);
+      return; // Stop if client secret fetch fails
+    }
+
+    // --- Initialize Stripe Elements ---
+    if (clientSecret) {
+      const appearance = { theme: 'stripe' /* or 'night', 'flat' */ };
+      elements = stripe.elements({ appearance, clientSecret });
+
+      // Create and mount the Payment Element
+      const paymentElement = elements.create("payment");
+      paymentElement.mount("#payment-element");
+      console.log("Payment Element mounted.");
+
+      // Handle form submission
+      const paymentForm = document.getElementById('payment-form');
+      paymentForm.addEventListener('submit', handlePaymentSubmit);
+
+    } else {
+      showPaymentMessage("Could not initialize payment form.", true);
+    }
+  });
+
+
+  // --- Handle Payment Form Submission ---
+  async function handlePaymentSubmit(event) {
+    event.preventDefault();
+    if (!stripe || !elements) {
+      console.error("Stripe or Elements not initialized.");
+      showPaymentMessage("Payment system not ready. Please refresh.", true);
+      return;
+    }
+
+    setLoading(true); // Show spinner, disable button
+    showPaymentMessage("", false); // Clear previous messages
+
+    // Define the return_url (where Stripe redirects after payment attempt)
+    // This URL should ideally be a page that checks the payment status.
+    // For simplicity now, let's redirect to booking history and show a message there later.
+    const returnUrl = `${window.location.origin}/booking-history?payment_attempt=true&booking_id=${bookingId}`;
+
+    console.log("Confirming payment...");
+    const { error } = await stripe.confirmPayment({
+      elements,
+      confirmParams: {
+        return_url: returnUrl,
+      },
+    });
+
+    // This point will only be reached if there is an immediate error when confirming the payment.
+    // Otherwise, the customer will be redirected to the `return_url`.
+    if (error) {
+      console.error("Payment confirmation error:", error);
+      const message = error.message || "An unexpected error occurred.";
+      showPaymentMessage(message, true); // Display error message inline
+    } else {
+      // This part is generally not reached because of the redirect
+      console.log("Payment confirmation initiated, awaiting redirect...");
+      showPaymentMessage("Processing payment...", false);
+    }
+
+    setLoading(false); // Hide spinner, re-enable button (only if error occurred immediately)
+  }
+
+</script>
+
+</body>
+</html>

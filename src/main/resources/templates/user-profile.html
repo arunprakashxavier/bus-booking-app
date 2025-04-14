@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Profile - Bus Booking</title>
+    <link rel="icon" type="image/png" th:href="@{/images/favicon.png}">
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <style>
+        nav { background-color: rgba(0,0,0,0.7); padding: 10px 30px; color: white; overflow: hidden; position: sticky; top: 0; z-index: 1000;}
+        nav span, nav a { line-height: 30px; color: white; text-decoration: none; vertical-align: middle; }
+        nav span { font-weight: bold; font-size: 1.1em; }
+        nav a.nav-link { margin-left: 20px; }
+        nav a#logoutLink { float: right; }
+        nav a:hover { text-decoration: underline; }
+
+        .content-box { background-color: rgba(255, 255, 255, 0.92); padding: 25px 35px; border-radius: 15px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15); margin: 30px auto; max-width: 800px; color: #333; }
+        .content-box h2 { text-align: center; margin-bottom: 30px; }
+
+        .profile-section { margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #eee;}
+        .profile-section h3 { margin-bottom: 15px; font-weight: 600; color: #333; }
+
+        .form-group { margin-bottom: 15px; }
+        .form-group label { font-weight: 500; display: block; margin-bottom: 5px; }
+        .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 1em; }
+        .form-group input[disabled] { background-color: #e9ecef; cursor: not-allowed; }
+        .form-row { display: flex; flex-wrap: wrap; gap: 20px; }
+        .form-row .form-group { flex: 1; min-width: 200px; }
+
+        /* Buttons */
+        .btn-vibrant { padding: 10px 25px; font-size: 1em; font-weight: bold; border-radius: 6px; cursor: pointer; border: none; color: white; text-align: center; transition: 0.3s ease; text-transform: uppercase; letter-spacing: 0.5px; display: inline-block; width: auto; text-decoration: none; }
+        .btn-primary { background: linear-gradient(45deg, #007bff, #0056b3); }
+        .btn-primary:hover:not(:disabled) { background: linear-gradient(45deg, #0056b3, #007bff); transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        .btn-primary:disabled { background: #ccc; cursor: not-allowed; opacity: 0.7;}
+
+        /* Messages */
+        .message { text-align:center; margin: 15px 0; font-weight: bold; padding: 10px; border-radius: 5px; display: none; }
+        .message.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .message.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+
+    </style>
+    <script> const tokenOnLoadProfile = localStorage.getItem('authToken'); if (!tokenOnLoadProfile) { window.location.replace('/login'); } </script>
+</head>
+<body class="bg-user">
+
+<nav>
+    <span>BusApp</span>
+    <a href="/dashboard" class="nav-link">Dashboard</a>
+    <a href="/booking-history" class="nav-link">My Bookings</a>
+    <a href="/profile" class="nav-link">Profile</a>
+    <a href="#" id="logoutLink">Logout</a>
+</nav>
+
+<div class="content-box">
+    <h2>My Profile</h2>
+
+    <div class="profile-section">
+        <h3>Your Information</h3>
+        <div id="profileMessage" class="message"></div>
+        <form id="profileForm">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="profileFirstName">First Name:</label>
+                    <input type="text" id="profileFirstName" name="firstName" required>
+                </div>
+                <div class="form-group">
+                    <label for="profileLastName">Last Name:</label>
+                    <input type="text" id="profileLastName" name="lastName" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="profileEmail">Email:</label>
+                <input type="email" id="profileEmail" name="email" disabled> </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="profileAge">Age:</label>
+                    <input type="number" id="profileAge" name="age" required min="1">
+                </div>
+                <div class="form-group">
+                    <label for="profileGender">Gender:</label>
+                    <select id="profileGender" name="gender" required>
+                        <option value="" disabled>Select</option>
+                        <option value="Male">Male</option><option value="Female">Female</option><option value="Other">Other</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="profileDob">Date of Birth:</label>
+                    <input type="date" id="profileDob" name="dateOfBirth" required>
+                </div>
+                <div class="form-group">
+                    <label for="profilePhone">Phone Number:</label>
+                    <input type="text" id="profilePhone" name="phoneNumber" required pattern="\d{10}" title="Phone number must be 10 digits">
+                </div>
+            </div>
+            <button type="submit" id="saveProfileBtn" class="btn-vibrant btn-primary">Save Profile Changes</button>
+        </form>
+    </div>
+
+    <div class="profile-section">
+        <h3>Change Password</h3>
+        <div id="passwordMessage" class="message"></div>
+        <form id="passwordForm">
+            <div class="form-group">
+                <label for="currentPassword">Current Password:</label>
+                <input type="password" id="currentPassword" name="currentPassword" required>
+            </div>
+            <div class="form-group">
+                <label for="newPassword">New Password:</label>
+                <input type="password" id="newPassword" name="newPassword" required minlength="6">
+            </div>
+            <div class="form-group">
+                <label for="confirmNewPassword">Confirm New Password:</label>
+                <input type="password" id="confirmNewPassword" name="confirmNewPassword" required>
+            </div>
+            <button type="submit" id="changePasswordBtn" class="btn-vibrant btn-primary">Change Password</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    // --- Reusable ---
+    function checkUserAuth() { const token = localStorage.getItem('authToken'); if (!token) { window.location.replace('/login'); return null; } return token; }
+    function setupLogout() { const logoutLink = document.getElementById('logoutLink'); if (logoutLink) { logoutLink.removeEventListener('click', handleLogout); logoutLink.addEventListener('click', handleLogout); } }
+    function handleLogout(event) { event.preventDefault(); localStorage.clear(); window.location.href = '/login'; }
+    function showMessage(elementId, message, isError = false) { const msgDiv = document.getElementById(elementId); if (!msgDiv) return; msgDiv.textContent = message; msgDiv.className = `message ${isError ? 'error' : 'success'}`; msgDiv.style.display = 'block'; if (!isError) { setTimeout(() => { if (msgDiv) msgDiv.style.display = 'none'; }, 4000); } }
+    function disableButton(buttonId, disabled = true, text = null) { const btn = document.getElementById(buttonId); if(btn) { btn.disabled = disabled; if(text) btn.textContent = text;} }
+
+    // --- Load Profile ---
+    async function loadProfileData(token) {
+        disableButton('saveProfileBtn', true);
+        disableButton('changePasswordBtn', true);
+        try {
+            const response = await fetch('/api/user/profile', { method: 'GET', headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } });
+            if (!response.ok) { throw new Error(`Failed to load profile: ${response.statusText}`); }
+            const profile = await response.json();
+            document.getElementById('profileFirstName').value = profile.firstName || '';
+            document.getElementById('profileLastName').value = profile.lastName || '';
+            document.getElementById('profileEmail').value = profile.email || '';
+            document.getElementById('profileAge').value = profile.age || '';
+            document.getElementById('profileGender').value = profile.gender || '';
+            document.getElementById('profileDob').value = profile.dateOfBirth || '';
+            document.getElementById('profilePhone').value = profile.phoneNumber || '';
+            disableButton('saveProfileBtn', false); // Enable buttons after loading
+            disableButton('changePasswordBtn', false);
+        } catch (error) {
+            console.error("Error loading profile:", error);
+            showMessage('profileMessage', `Error loading profile: ${error.message}`, true);
+        }
+    }
+
+    // --- Save Profile ---
+    async function handleProfileSubmit(event, token) {
+        event.preventDefault();
+        showMessage('profileMessage', '', false); // Clear message
+        disableButton('saveProfileBtn', true, 'Saving...');
+
+        const profileData = {
+            firstName: document.getElementById('profileFirstName').value,
+            lastName: document.getElementById('profileLastName').value,
+            // email: document.getElementById('profileEmail').value, // Don't send email
+            age: document.getElementById('profileAge').value,
+            gender: document.getElementById('profileGender').value,
+            dateOfBirth: document.getElementById('profileDob').value,
+            phoneNumber: document.getElementById('profilePhone').value,
+        };
+
+        try {
+            const response = await fetch('/api/user/profile', { method: 'PUT', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(profileData) });
+            if (!response.ok) { const err = await response.json(); throw new Error(err.message || `Error ${response.status}`); }
+            const updatedProfile = await response.json();
+            showMessage('profileMessage', 'Profile updated successfully!', false);
+            // Update first name in localStorage if changed
+            if (localStorage.getItem('userFirstName') !== updatedProfile.firstName) {
+                localStorage.setItem('userFirstName', updatedProfile.firstName);
+            }
+        } catch (error) {
+            console.error("Error updating profile:", error);
+            showMessage('profileMessage', `Error: ${error.message}`, true);
+        } finally {
+            disableButton('saveProfileBtn', false, 'Save Profile Changes');
+        }
+    }
+
+    // --- Change Password ---
+    async function handlePasswordSubmit(event, token) {
+        event.preventDefault();
+        showMessage('passwordMessage', '', false); // Clear message
+        const currentPassword = document.getElementById('currentPassword').value;
+        const newPassword = document.getElementById('newPassword').value;
+        const confirmNewPassword = document.getElementById('confirmNewPassword').value;
+
+        if (newPassword !== confirmNewPassword) {
+            showMessage('passwordMessage', 'New passwords do not match.', true); return;
+        }
+        if (newPassword.length < 6) {
+            showMessage('passwordMessage', 'New password must be at least 6 characters.', true); return;
+        }
+
+
+        disableButton('changePasswordBtn', true, 'Changing...');
+        const passwordData = { currentPassword, newPassword, confirmNewPassword };
+
+        try {
+            const response = await fetch('/api/user/change-password', { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(passwordData) });
+            const responseText = await response.text(); // Read response text regardless of status
+            if (!response.ok) {
+                let detailError = responseText; try { detailError = JSON.parse(responseText).message || detailError; } catch(e){}
+                throw new Error(detailError || `Error ${response.status}`);
+            }
+            // Success
+            showMessage('passwordMessage', responseText || 'Password changed successfully!', false);
+            document.getElementById('passwordForm').reset(); // Clear form on success
+        } catch (error) {
+            console.error("Error changing password:", error);
+            showMessage('passwordMessage', `Error: ${error.message}`, true);
+        } finally {
+            disableButton('changePasswordBtn', false, 'Change Password');
+        }
+    }
+
+
+    // --- Initial Setup ---
+    document.addEventListener('DOMContentLoaded', () => {
+        const token = checkUserAuth();
+        if (!token) return;
+        setupLogout();
+        loadProfileData(token);
+
+        // Attach listeners
+        const profileForm = document.getElementById('profileForm');
+        const passwordForm = document.getElementById('passwordForm');
+        if(profileForm) profileForm.addEventListener('submit', (e) => handleProfileSubmit(e, token));
+        if(passwordForm) passwordForm.addEventListener('submit', (e) => handlePasswordSubmit(e, token));
+    });
+</script>
+</body>
+</html>

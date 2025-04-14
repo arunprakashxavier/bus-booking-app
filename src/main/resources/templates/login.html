@@ -1,0 +1,146 @@
+<!--login.html-->
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Bus Booking</title>
+    <link rel="icon" type="image/png" th:href="@{/images/favicon.png}">
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <style>
+        /* Optional: Style for login error messages */
+        #loginError {
+            color: #dc3545; /* Red color */
+            font-size: 0.9em;
+            margin-top: 10px;
+            margin-bottom: 10px;
+            text-align: center;
+            font-weight: bold;
+            display: none; /* Hidden by default */
+        }
+        /* Style for success messages (like after registration redirect) */
+        #loginSuccess {
+            color: #28a745; /* Green color */
+            font-size: 0.9em;
+            margin-top: 10px;
+            margin-bottom: 10px;
+            text-align: center;
+            font-weight: bold;
+            /* Display handled by JS check now */
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-login-register">
+
+<div class="form-container">
+    <h2>Welcome Back!</h2>
+    <p>Please login to continue.</p>
+
+    <div id="loginSuccess" th:if="${registrationSuccessMessage}" th:text="${registrationSuccessMessage}"></div>
+
+    <div id="loginError"></div>
+
+    <form id="loginForm">
+        <div class="form-group">
+            <label for="email">Email:</label>
+            <input type="email" id="email" placeholder="Enter your email" required>
+        </div>
+
+        <div class="form-group">
+            <label for="password">Password:</label>
+            <input type="password" id="password" placeholder="Enter your password" required>
+        </div>
+
+        <button type="submit" class="btn-vibrant">Login</button>
+
+        <div class="form-link">
+            <span>Don't have an account? </span>
+            <a th:href="@{/register}">Register here</a> </div>
+    </form>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const loginForm = document.getElementById('loginForm');
+        const loginErrorDiv = document.getElementById('loginError');
+        const loginSuccessDiv = document.getElementById('loginSuccess');
+        // Show success message if the text content is set by Thymeleaf
+        if (loginSuccessDiv && loginSuccessDiv.textContent) {
+            loginSuccessDiv.style.display = 'block';
+        }
+
+        loginForm.addEventListener('submit', function (event) {
+            event.preventDefault();
+            loginErrorDiv.style.display = 'none';
+            loginErrorDiv.textContent = '';
+
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            if (!email || !password) {
+                loginErrorDiv.textContent = 'Please enter both email and password.';
+                loginErrorDiv.style.display = 'block';
+                return;
+            }
+
+            const loginData = { email: email, password: password };
+
+            fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(loginData)
+            })
+                .then(response => {
+                    if (response.ok) {
+                        return response.json();
+                    } else {
+                        return response.text().then(errorText => {
+                            let errorMsg = `Error: ${response.statusText} (Status: ${response.status})`;
+                            try {
+                                const errorData = JSON.parse(errorText);
+                                errorMsg = errorData.message || errorData.error || errorText || errorMsg;
+                            } catch (e) {
+                                errorMsg = errorText || errorMsg;
+                            }
+                            throw new Error(errorMsg);
+                        });
+                    }
+                })
+                .then(data => {
+                    // --- Login Successful ---
+                    console.log('Login successful:', data);
+
+                    // Store token and user details
+                    localStorage.setItem('authToken', data.token);
+                    localStorage.setItem('userEmail', data.email);
+                    localStorage.setItem('userRoles', JSON.stringify(data.roles)); // Store roles
+                    localStorage.setItem('userId', data.id);
+                    localStorage.setItem('userFirstName', data.firstName);
+
+                    // **** MODIFIED PART: Role-based Redirect ****
+                    // Check if the roles array includes 'ROLE_ADMIN'
+                    if (data.roles && data.roles.includes('ROLE_ADMIN')) {
+                        // Redirect Admin users to Admin Dashboard
+                        console.log("Admin user detected. Redirecting to /admin/dashboard");
+                        window.location.href = '/admin/dashboard';
+                    } else {
+                        // Redirect non-Admin users (assume ROLE_USER) to User Dashboard
+                        console.log("User detected. Redirecting to /dashboard");
+                        window.location.href = '/dashboard';
+                    }
+                    // **** END OF MODIFIED PART ****
+
+                })
+                .catch(error => {
+                    // --- Login Failed ---
+                    console.error('Login failed:', error);
+                    loginErrorDiv.textContent = error.message || 'Login failed. Please check your credentials.';
+                    loginErrorDiv.style.display = 'block';
+                });
+        });
+    });
+</script>
+
+</body>
+</html>

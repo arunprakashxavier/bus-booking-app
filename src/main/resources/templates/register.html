@@ -1,0 +1,166 @@
+<!--register.html-->
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - Bus Booking</title>
+    <link rel="icon" type="image/png" th:href="@{/images/favicon.png}">
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <style>
+        /* Optional: Style for registration error messages */
+        #registrationError {
+            color: #dc3545; /* Red color */
+            font-size: 0.9em;
+            margin-top: 10px;
+            margin-bottom: 10px;
+            text-align: center;
+            font-weight: bold;
+            display: none; /* Hidden by default */
+        }
+    </style>
+</head>
+<body class="bg-login-register">
+
+<div class="form-container">
+    <h2>Create Your Account</h2>
+
+    <form id="registerForm" th:action="@{/api/auth/register}" th:object="${registerDto}" method="post">
+
+        <div id="registrationError"></div>
+
+        <div th:if="${#fields.hasGlobalErrors()}" class="alert alert-danger error-message" style="color: red; margin-bottom: 10px;">
+            <ul> <li th:each="err : ${#fields.globalErrors()}" th:text="${err}"></li> </ul>
+        </div>
+
+        <div class="form-group">
+            <label for="firstName">First Name:</label>
+            <input type="text" id="firstName" placeholder="Enter your first name" th:field="*{firstName}" required>
+            <span th:if="${#fields.hasErrors('firstName')}" th:errors="*{firstName}" class="error-message"></span>
+        </div>
+        <div class="form-group">
+            <label for="lastName">Last Name:</label>
+            <input type="text" id="lastName" placeholder="Enter your last name" th:field="*{lastName}" required>
+            <span th:if="${#fields.hasErrors('lastName')}" th:errors="*{lastName}" class="error-message"></span>
+        </div>
+        <div class="form-group">
+            <label for="age">Age:</label>
+            <input type="number" id="age" placeholder="Enter your age" th:field="*{age}" required min="1">
+            <span th:if="${#fields.hasErrors('age')}" th:errors="*{age}" class="error-message"></span>
+        </div>
+        <div class="form-group">
+            <label for="dateOfBirth">Date of Birth:</label>
+            <input type="date" id="dateOfBirth" th:field="*{dateOfBirth}" required>
+            <span th:if="${#fields.hasErrors('dateOfBirth')}" th:errors="*{dateOfBirth}" class="error-message"></span>
+        </div>
+        <div class="form-group">
+            <label for="gender">Gender:</label>
+            <select id="gender" th:field="*{gender}" required>
+                <option value="" disabled selected>Select Gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+            </select>
+            <span th:if="${#fields.hasErrors('gender')}" th:errors="*{gender}" class="error-message"></span>
+        </div>
+        <div class="form-group">
+            <label for="phoneNumber">Phone Number:</label>
+            <input type="text" id="phoneNumber" placeholder="Enter 10 digit phone number" th:field="*{phoneNumber}" required pattern="\d{10}" title="Phone number must be 10 digits">
+            <span th:if="${#fields.hasErrors('phoneNumber')}" th:errors="*{phoneNumber}" class="error-message"></span>
+        </div>
+        <div class="form-group">
+            <label for="email">Email (used for login):</label>
+            <input type="email" id="email" placeholder="Enter your email" th:field="*{email}" required>
+            <span th:if="${#fields.hasErrors('email')}" th:errors="*{email}" class="error-message"></span>
+        </div>
+        <div class="form-group">
+            <label for="password">Password:</label>
+            <input type="password" id="password" placeholder="Create a password (min 6 chars)" th:field="*{password}" required>
+            <span th:if="${#fields.hasErrors('password')}" th:errors="*{password}" class="error-message"></span>
+        </div>
+        <div class="form-group">
+            <label for="confirmPassword">Confirm Password:</label>
+            <input type="password" id="confirmPassword" placeholder="Re-enter your password" name="confirmPassword" required>
+        </div>
+
+        <button type="submit" class="btn-vibrant">Register</button>
+
+        <div class="form-link">
+            <span>Already have an account? </span>
+            <a th:href="@{/login}">Login here</a>
+        </div>
+
+    </form>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Use ID selector for the form
+        const registerForm = document.getElementById('registerForm');
+        const registerErrorDiv = document.getElementById('registrationError');
+
+        registerForm.addEventListener('submit', function (event) {
+            event.preventDefault(); // Stop standard form submission
+            registerErrorDiv.style.display = 'none';
+            registerErrorDiv.textContent = '';
+
+            // Collect form data using FormData
+            const formData = new FormData(registerForm);
+            const registerData = {};
+            // Convert FormData to plain object, respecting input names/ids
+            // Ensure keys match the RegisterDto field names
+            registerData.firstName = formData.get('firstName');
+            registerData.lastName = formData.get('lastName');
+            registerData.age = formData.get('age'); // Will be string, backend converts
+            registerData.dateOfBirth = formData.get('dateOfBirth'); // Should be yyyy-MM-dd
+            registerData.gender = formData.get('gender');
+            registerData.phoneNumber = formData.get('phoneNumber');
+            registerData.email = formData.get('email');
+            registerData.password = formData.get('password');
+            registerData.confirmPassword = formData.get('confirmPassword'); // Get confirm password value
+
+            // Basic check for password match (client-side)
+            if (registerData.password !== registerData.confirmPassword) {
+                registerErrorDiv.textContent = 'Passwords do not match!';
+                registerErrorDiv.style.display = 'block';
+                return; // Stop submission
+            }
+
+            // Send data as JSON to the registration API
+            fetch('/api/auth/register', { // Target the API endpoint
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                // Send the plain JS object, JSON.stringify handles conversion
+                body: JSON.stringify(registerData)
+            })
+                .then(response => {
+                    // Check if response status is 201 Created or maybe 200 OK
+                    if (response.status === 201 || response.ok) {
+                        return response.text(); // Get the success message text
+                    } else {
+                        // Handle errors (like 400 Bad Request for validation/duplicates)
+                        return response.text().then(errorText => { // Get error body as text
+                            throw new Error(errorText || `Error: ${response.statusText} (Status: ${response.status})`);
+                        });
+                    }
+                })
+                .then(successMessage => {
+                    // --- Registration Successful ---
+                    console.log('Registration successful:', successMessage);
+                    // Redirect to login page with a success message flag
+                    window.location.href = '/login?registrationSuccess=true'; // Redirect to GET /login
+                })
+                .catch(error => {
+                    // --- Registration Failed ---
+                    console.error('Registration failed:', error);
+                    // Display error message from the API response or a generic one
+                    registerErrorDiv.textContent = error.message || 'Registration failed. Please check your input.';
+                    registerErrorDiv.style.display = 'block'; // Show the error div
+                });
+        });
+    });
+</script>
+</body>
+</html>

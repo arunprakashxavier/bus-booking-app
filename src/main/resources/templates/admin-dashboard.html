@@ -1,0 +1,85 @@
+<!--admin-dashboard-->
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Bus Booking</title>
+    <link rel="icon" type="image/png" th:href="@{/images/favicon.png}">
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <style>
+        /* Styles needed for this page */
+        .content-box { background-color: rgba(255, 255, 255, 0.88); padding: 30px 40px; border-radius: 15px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15); margin: 40px auto; max-width: 900px; color: #333; text-align: center; }
+        .content-box h2 { margin-bottom: 20px; }
+        .admin-actions { margin-top: 30px; }
+        nav { background-color: rgba(0,0,0,0.7); padding: 10px 30px; color: white; overflow: hidden; position: sticky; top: 0; z-index: 1000;}
+        nav span, nav a { line-height: 30px; color: white; text-decoration: none; vertical-align: middle; }
+        nav span { font-weight: bold; font-size: 1.1em; }
+        nav a.nav-link { margin-left: 20px; }
+        nav a#logoutLink { float: right; }
+        nav a:hover { text-decoration: underline; }
+        /* Style for buttons on dashboard */
+        .admin-actions .btn-vibrant {
+            width: auto; display: inline-block;
+            padding: 10px 30px; font-size: 0.9em; margin: 10px 15px;
+            /* Ensures base vibrant styles are applied if not in style.css */
+            color: white; text-decoration: none; border: none; border-radius: 25px; cursor: pointer; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1); transition: transform 0.2s ease, box-shadow 0.3s ease, background 0.3s ease;
+            background: linear-gradient(45deg, #ff6b6b, #ff4500); /* Default vibrant background */
+        }
+        .admin-actions .btn-vibrant:hover {
+            background: linear-gradient(45deg, #ff4500, #ff6b6b);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px 5px rgba(0, 0, 0, 0.4);
+        }
+
+    </style>
+</head>
+<body class="bg-admin">
+
+<nav>
+    <span>BusApp Admin</span>
+    <a href="/admin/dashboard" class="nav-link">Admin Home</a>
+    <a href="/admin/buses" class="nav-link">Manage Buses</a>
+    <a href="/admin/routes" class="nav-link">Manage Routes</a>
+    <a href="/admin/scheduled-trips" class="nav-link">Manage Trips</a>
+    <a href="/admin/bookings" class="nav-link">View Bookings</a> <a href="#" id="logoutLink">Logout</a>
+</nav>
+
+<div class="content-box">
+    <h2>Admin Dashboard</h2>
+    <p>Welcome, Admin! Manage your application resources here.</p>
+    <div class="admin-actions">
+        <a th:href="@{/admin/buses}" class="btn-vibrant">Manage Buses</a>
+        <a th:href="@{/admin/routes}" class="btn-vibrant">Manage Routes</a>
+        <a th:href="@{/admin/scheduled-trips}" class="btn-vibrant">Manage Trips</a>
+        <a th:href="@{/admin/bookings}" class="btn-vibrant">View Bookings</a> </div>
+</div>
+
+<script>
+    // Basic Auth Check and Logout script
+    document.addEventListener('DOMContentLoaded', function() {
+        // Optional: Add Admin Auth Check here too for consistency
+        const token = localStorage.getItem('authToken');
+        const rolesString = localStorage.getItem('userRoles');
+        let roles = [];
+        try { roles = rolesString ? JSON.parse(rolesString) : []; } catch(e) {}
+        if (!token || !roles.includes('ROLE_ADMIN')) {
+            console.log("Admin access required. Redirecting to login.");
+            localStorage.clear(); // Clear invalid state
+            window.location.replace('/login');
+            return; // Stop script execution
+        }
+
+        const logoutLink = document.getElementById('logoutLink');
+        if (logoutLink) {
+            logoutLink.addEventListener('click', function(event) {
+                event.preventDefault();
+                localStorage.clear();
+                console.log("Admin logged out, redirecting to login.");
+                window.location.href = '/login';
+            });
+        }
+    });
+</script>
+</body>
+</html>

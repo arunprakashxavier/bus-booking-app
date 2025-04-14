@@ -1,0 +1,195 @@
+<!--seat-selection.html-->
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Select Seats - Bus Booking</title>
+    <link rel="icon" type="image/png" th:href="@{/images/favicon.png}">
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <style>
+        /* Styles unchanged */
+        nav { background-color: rgba(0,0,0,0.7); padding: 10px 30px; color: white; overflow: hidden; position: sticky; top: 0; z-index: 1000;}
+        nav span, nav a { line-height: 30px; color: white; text-decoration: none; vertical-align: middle; }
+        nav span { font-weight: bold; font-size: 1.1em; }
+        nav a.nav-link { margin-left: 20px; }
+        nav a#logoutLink { float: right; }
+        nav a:hover { text-decoration: underline; }
+        .content-box { background-color: rgba(255, 255, 255, 0.92); padding: 25px 35px; border-radius: 15px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15); margin: 30px auto; max-width: 800px; color: #333; }
+        .content-box h2, .content-box h3 { text-align: center; margin-bottom: 20px; }
+        #tripInfo { text-align: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #eee; font-size: 0.95em; color: #555; }
+        #tripInfo strong { color: #333; }
+        #seatMapContainer { padding: 15px; margin: 20px auto; border: 1px solid #ccc; background-color: #fdfdff; border-radius: 8px; max-width: 450px; text-align: center; min-height: 150px; display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 5px; }
+        #seatMapContainer.loaded { display: block; text-align: center; }
+        .seat { display: inline-flex; justify-content: center; align-items: center; width: 40px; height: 35px; border: 1px solid #aaa; border-radius: 5px; margin: 5px; font-size: 0.8em; font-weight: bold; cursor: default; background-color: #e0e0e0; color: #777; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .seat.available { background-color: #c8e6c9; border-color: #a5d6a7; color: #388e3c; cursor: pointer; }
+        .seat.available:hover { background-color: #a5d6a7; }
+        .seat.booked { background-color: #bdbdbd; border-color: #9e9e9e; color: #616161; cursor: not-allowed; }
+        .seat.selected { background-color: #42a5f5; border-color: #1e88e5; color: white; font-weight: bold; box-shadow: 0 0 5px rgba(66, 165, 245, 0.7); }
+        .seat-aisle { display: inline-block; width: 25px; height: 35px; margin: 5px; visibility: hidden; }
+        .seat-row-break { display: block; width: 100%; height: 0; }
+        #selectionInfo { margin-top: 25px; padding-top: 20px; border-top: 1px solid #eee; text-align: center; }
+        #selectionInfo p { margin: 8px 0; font-size: 1.05em; }
+        #selectionInfo span { font-weight: bold; color: #0056b3; }
+        #proceedButton { padding: 10px 25px; font-size: 1em; font-weight: bold; border-radius: 6px; cursor: pointer; border: none; color: white; text-align: center; transition: 0.3s ease; text-transform: uppercase; letter-spacing: 0.5px; display: inline-block; width: auto; text-decoration: none; background: linear-gradient(45deg, #ff6b6b, #ff4500); margin-top: 15px; }
+        #proceedButton:disabled { background: #ccc; cursor: not-allowed; opacity: 0.7; transform: none; box-shadow: none;}
+        #proceedButton:not(:disabled):hover { background: linear-gradient(45deg, #ff4500, #ff6b6b); transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        #proceedButton.loading { cursor: wait; opacity: 0.8; }
+        /* Message Area */
+        #apiMessage { text-align:center; margin: 15px auto; font-weight: bold; padding: 10px; border-radius: 5px; display: none; max-width: 450px; }
+        #apiMessage.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        #apiMessage.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    </style>
+
+    <script>
+        const initialTokenCheck = localStorage.getItem('authToken');
+        let pathSegments = window.location.pathname.split('/');
+        const tripIdFromPath = pathSegments.length > 3 ? pathSegments[3] : null; // Adjusted index
+
+        if (!initialTokenCheck) { window.location.replace('/login'); }
+        else if (!tripIdFromPath || isNaN(tripIdFromPath)) { console.error("Invalid Trip ID in URL"); window.location.replace('/dashboard');}
+        else { console.log("Token found, allowing page load for tripId:", tripIdFromPath); }
+    </script>
+</head>
+<body class="bg-user">
+
+<nav>
+    <span>BusApp</span>
+    <a href="/dashboard" class="nav-link">Dashboard</a>
+    <a href="/booking-history" class="nav-link">My Bookings</a>
+    <a href="/profile" class="nav-link">Profile</a>
+    <a href="#" id="logoutLink">Logout</a>
+</nav>
+
+<div class="content-box">
+    <h2>Select Your Seats</h2>
+    <div id="tripInfo">Loading trip details...</div>
+    <div id="apiMessage"></div> <div id="seatMapContainer">Loading Seat Map...</div>
+    <div id="selectionInfo">
+        <p>Selected Seats: <span id="selectedSeatsList">None</span></p>
+        <p>Total Fare: <span id="totalFare">₹0.00</span></p>
+        <button id="proceedButton" disabled>Select Seats to Proceed</button>
+    </div>
+</div>
+
+<script th:inline="javascript">
+    /* Get tripId passed from controller */
+    const tripId = /*[[${tripId}]]*/ null;
+
+    // Global state
+    let selectedSeats = new Set();
+    let baseFare = 0;
+    let totalSeatsInBus = 0;
+
+    // --- Reusable Functions ---
+    function checkUserAuth() { const token = localStorage.getItem('authToken'); if (!token) { console.log("No token found, redirecting."); window.location.replace('/login'); return null; } return token; }
+    function setupLogout() { const logoutLink = document.getElementById('logoutLink'); if (logoutLink) { logoutLink.removeEventListener('click', handleLogout); logoutLink.addEventListener('click', handleLogout); } }
+    function handleLogout(event) { event.preventDefault(); localStorage.clear(); window.location.href = '/login'; }
+    function showApiMessage(message, isError = false) { const msgDiv = document.getElementById('apiMessage'); if (!msgDiv) return; msgDiv.textContent = message; msgDiv.className = isError ? 'error' : 'success'; msgDiv.style.display = 'block'; if (!isError) { setTimeout(() => { if(msgDiv) msgDiv.style.display = 'none'; }, 5000); } }
+
+    // --- Seat Selection Specific Functions ---
+
+    async function fetchAndRenderSeatMap(currentTripId, token) {
+        const seatMapContainer = document.getElementById('seatMapContainer');
+        const tripInfoDiv = document.getElementById('tripInfo');
+        seatMapContainer.innerHTML = 'Loading Seat Map...';
+        tripInfoDiv.innerHTML = 'Loading trip details...';
+        const apiUrl = `/api/trips/${currentTripId}/seats`;
+        console.log("Fetching seat data from:", apiUrl);
+        try {
+            const response = await fetch(apiUrl, { method: 'GET', headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } });
+            console.log("Fetch response status:", response.status);
+            if (!response.ok) { let errorText = `HTTP error! Status: ${response.status} ${response.statusText}`; try { const errorData = await response.json(); errorText = errorData.message || errorData.error || errorText; } catch (e) {} throw new Error(errorText); }
+            const layoutData = await response.json();
+            console.log("Seat data received:", layoutData); // Log received data
+            if (layoutData.tripFare == null || layoutData.totalSeats == null || !layoutData.seatStatus) { console.error("Incomplete data received:", layoutData); throw new Error("Incomplete seat data received."); }
+            baseFare = layoutData.tripFare;
+            totalSeatsInBus = layoutData.totalSeats;
+            tripInfoDiv.innerHTML = `Trip ID: ${currentTripId} - Fare per seat: ₹${baseFare.toFixed(2)}`;
+            renderSeatMap(layoutData);
+        } catch (error) {
+            console.error('Error fetching seat data:', error);
+            seatMapContainer.innerHTML = `<p style="color: red;">Error loading seat map: ${error.message}</p>`;
+            tripInfoDiv.innerHTML = 'Could not load trip details.';
+        }
+    }
+
+    // Render the seat map based on data
+    function renderSeatMap(layoutData) {
+        const seatMapContainer = document.getElementById('seatMapContainer');
+        seatMapContainer.innerHTML = ''; seatMapContainer.classList.add('loaded');
+        if (!totalSeatsInBus || !layoutData.seatStatus) { seatMapContainer.innerHTML = '<p style="color: red;">Error: Insufficient data.</p>'; return; }
+        const seatsPerRow = 4; const aislePosition = 2;
+
+        console.log("--- Rendering Seat Map ---"); // Log Start
+        console.log("Seat Status Map Received by render function:", layoutData.seatStatus); // Log the map
+
+        for (let i = 1; i <= totalSeatsInBus; i++) {
+            const seatNumber = String(i);
+            const status = layoutData.seatStatus[seatNumber] || 'UNAVAILABLE'; // Get status or default
+
+            // **** ADDED DETAILED LOG ****
+            console.log(`Processing Seat: "${seatNumber}" | Status from map: ${layoutData.seatStatus[seatNumber]} (Type: ${typeof layoutData.seatStatus[seatNumber]}) | Resolved Status: ${status}`);
+
+            const seatElement = document.createElement('div');
+            seatElement.className = 'seat'; seatElement.dataset.seatNumber = seatNumber; seatElement.textContent = seatNumber;
+            switch (status) {
+                case 'AVAILABLE':
+                    console.log(`   --> Seat ${seatNumber}: AVAILABLE. Adding class and listener.`);
+                    seatElement.classList.add('available');
+                    seatElement.addEventListener('click', handleSeatClick);
+                    break;
+                case 'BOOKED':
+                    console.log(`   --> Seat ${seatNumber}: BOOKED.`);
+                    seatElement.classList.add('booked');
+                    break;
+                case 'LOCKED':
+                    console.log(`   --> Seat ${seatNumber}: LOCKED.`);
+                    seatElement.classList.add('booked'); // Visually same as booked
+                    break;
+                case 'UNAVAILABLE':
+                default:
+                    console.log(`   --> Seat ${seatNumber}: UNAVAILABLE or Missing.`);
+                    seatElement.classList.add('unavailable');
+                    break;
+            }
+            seatMapContainer.appendChild(seatElement);
+            // Add aisle/break
+            if (i % seatsPerRow === aislePosition) { const aisle = document.createElement('div'); aisle.className = 'seat-aisle'; seatMapContainer.appendChild(aisle); }
+            else if (i % seatsPerRow === 0) { const rowBreak = document.createElement('div'); rowBreak.className = 'seat-row-break'; seatMapContainer.appendChild(rowBreak); }
+        }
+        console.log("--- Finished Rendering Seat Map ---"); // Log End
+    }
+
+    // Handle clicking on an available seat
+    function handleSeatClick(event) {
+        console.log("!!! Click Handler Entered for seat:", event.target.dataset.seatNumber); // Check if handler runs
+        const seatElement = event.target;
+        const seatNumber = seatElement.dataset.seatNumber;
+        if (!seatElement.classList.contains('available')) { console.warn("Clicked non-available seat?"); return; } // Add warning
+        if (selectedSeats.has(seatNumber)) { selectedSeats.delete(seatNumber); seatElement.classList.remove('selected'); }
+        else { selectedSeats.add(seatNumber); seatElement.classList.add('selected'); }
+        updateSelectionInfo();
+    }
+
+    // Update the display of selected seats and total fare
+    function updateSelectionInfo() { /* ... same as before ... */ }
+
+    // Handle Proceed Button Click
+    const proceedButton = document.getElementById('proceedButton');
+    if(proceedButton) { /* ... same listener logic as before (with lock API call) ... */ }
+
+    // --- Initial Load Logic ---
+    document.addEventListener('DOMContentLoaded', () => { /* ... same as before ... */ });
+
+
+    // --- Full JS (ensure all helper functions are included) ---
+    function updateSelectionInfo() { const selectedListSpan = document.getElementById('selectedSeatsList'); const totalFareSpan = document.getElementById('totalFare'); const proceedBtn = document.getElementById('proceedButton'); if (!selectedListSpan || !totalFareSpan || !proceedBtn) return; if (selectedSeats.size === 0) { selectedListSpan.textContent = 'None'; totalFareSpan.textContent = '₹0.00'; proceedBtn.disabled = true; proceedBtn.textContent = 'Select Seats to Proceed'; } else { const sortedSeats = Array.from(selectedSeats).sort((a, b) => { if (!isNaN(a) && !isNaN(b)) return parseInt(a) - parseInt(b); return a.localeCompare(b); }); selectedListSpan.textContent = sortedSeats.join(', '); const calculatedFare = baseFare * selectedSeats.size; totalFareSpan.textContent = `₹${calculatedFare.toFixed(2)}`; proceedBtn.disabled = false; proceedBtn.textContent = 'Proceed to Book'; }}
+    // Proceed button listener
+    if(proceedButton) { proceedButton.addEventListener('click', async () => { if(selectedSeats.size === 0) return; const selectedSeatNumbers = Array.from(selectedSeats); const token = checkUserAuth(); const apiResponseDiv = document.getElementById('apiMessage'); if (!token) { showApiMessage("Auth error.", true); return; } console.log("Attempting lock:", selectedSeatNumbers); proceedButton.disabled = true; proceedButton.textContent = 'Locking...'; proceedButton.classList.add('loading'); apiResponseDiv.style.display = 'none'; const lockRequestData = { tripId: tripId, seatNumbers: selectedSeatNumbers }; const lockApiUrl = '/api/booking/lock-seats'; try { const response = await fetch(lockApiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(lockRequestData) }); if (response.ok) { const successMsg = await response.text(); console.log("Lock successful:", successMsg); sessionStorage.setItem('selectedTripId', tripId); sessionStorage.setItem('selectedSeats', JSON.stringify(selectedSeatNumbers)); sessionStorage.setItem('calculatedFare', baseFare * selectedSeats.size); sessionStorage.setItem('baseFarePerSeat', baseFare); console.log("Redirecting to /booking/confirm"); window.location.href = '/booking/confirm'; } else { const errorText = await response.text(); let detailError = errorText; try { const errorJson = JSON.parse(errorText); detailError = errorJson.message || errorJson.error || errorText; } catch(e) { /* Ignore */ } throw new Error(detailError || `Failed to lock seats. Status: ${response.status}`); } } catch (error) { console.error('Error locking seats:', error); showApiMessage(`Could not lock seats: ${error.message}.`, true); proceedButton.disabled = false; proceedButton.textContent = 'Proceed to Book'; proceedButton.classList.remove('loading'); } }); }
+    document.addEventListener('DOMContentLoaded', () => { console.log("Seat Selection Page Loaded. Trip ID:", tripId); const token = checkUserAuth(); if (token && tripId) { fetchAndRenderSeatMap(tripId, token); setupLogout(); } else { console.error("Auth token or Trip ID missing."); if (!tripId) { document.getElementById('seatMapContainer').textContent = 'Error: Trip ID is missing.'; } } });
+
+</script>
+
+</body>
+</html>

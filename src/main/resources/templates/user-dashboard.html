@@ -1,0 +1,205 @@
+<!--user-dashboard.html-->
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - Bus Booking</title>
+  <link rel="icon" type="image/png" th:href="@{/images/favicon.png}">
+  <link rel="stylesheet" th:href="@{/css/style.css}">
+  <style>
+    /* Styles unchanged */
+    nav { background-color: rgba(0,0,0,0.7); padding: 10px 30px; color: white; overflow: hidden; position: sticky; top: 0; z-index: 1000;}
+    nav span, nav a { line-height: 30px; color: white; text-decoration: none; vertical-align: middle;}
+    nav span { font-weight: bold; font-size: 1.1em; }
+    nav a.nav-link { margin-left: 20px; }
+    nav a#logoutLink { float: right; }
+    nav a:hover { text-decoration: underline; }
+    .content-box { background-color: rgba(255, 255, 255, 0.9); padding: 30px 40px; border-radius: 15px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15); margin: 30px auto; max-width: 950px; color: #333; }
+    .content-box h2, .content-box h3 { text-align: center; margin-bottom: 25px; }
+    .search-form-container { background-color: rgba(0, 0, 0, 0.03); padding: 20px 30px; border-radius: 8px; margin-bottom: 30px; border: 1px solid #eee; }
+    .search-form-container h3 { margin-bottom: 20px; font-weight: 600; }
+    #searchForm { display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; }
+    #searchForm .form-group { flex: 1; min-width: 180px; margin-bottom: 0; }
+    #searchForm label { font-weight: 500; margin-bottom: 5px; display: block; }
+    #searchForm input[type="text"], #searchForm input[type="date"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+    #searchButton { padding: 10px 25px; height: 40px; margin-bottom: 0; background: linear-gradient(45deg, #ff6b6b, #ff4500); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; transition: 0.3s ease; width: auto; }
+    #searchButton:hover { background: linear-gradient(45deg, #ff4500, #ff6b6b); transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,0.2);}
+    #searchResults { margin-top: 30px; }
+    .trip-card { background-color: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px 20px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 15px; }
+    .trip-details { flex: 3; min-width: 250px; }
+    .trip-timing { flex: 2; min-width: 180px; }
+    .trip-booking { flex: 1; min-width: 120px; text-align: right; }
+    .trip-card h4 { margin-top: 0; margin-bottom: 8px; color: #0056b3; }
+    .trip-card p { margin: 4px 0; font-size: 0.95em; color: #444; }
+    .trip-card strong { color: #222; }
+    .trip-card .book-btn { padding: 8px 15px; font-size: 0.9em; }
+    #searchMessage { text-align: center; padding: 20px; font-style: italic; color: #666; }
+  </style>
+
+  <script>
+    const token = localStorage.getItem('authToken');
+    if (!token) { window.location.replace('/login'); }
+    else { console.log("Token found, allowing page load."); }
+  </script>
+</head>
+<body class="bg-user">
+
+<nav>
+  <span>BusApp</span>
+  <a href="/dashboard" class="nav-link">Dashboard</a>
+  <a href="/booking-history" class="nav-link">My Bookings</a>
+  <a href="/profile" class="nav-link">Profile</a>
+  <a href="#" id="logoutLink">Logout</a>
+</nav>
+
+<div class="content-box">
+  <h2 id="welcomeMessage">Welcome, User!</h2>
+
+  <div class="search-form-container">
+    <h3>Search for Buses</h3>
+    <form id="searchForm">
+      <div class="form-group">
+        <label for="searchOrigin">From:</label>
+        <input type="text" id="searchOrigin" name="origin" placeholder="Enter Origin City" required>
+      </div>
+      <div class="form-group">
+        <label for="searchDestination">To:</label>
+        <input type="text" id="searchDestination" name="destination" placeholder="Enter Destination City" required>
+      </div>
+      <div class="form-group">
+        <label for="searchDate">Date:</label>
+        <input type="date" id="searchDate" name="date" required>
+      </div>
+      <button type="submit" id="searchButton">Search</button>
+    </form>
+  </div>
+  <hr style="margin: 30px 0;">
+
+  <div id="searchResults">
+    <h3 style="text-align: center; margin-bottom: 20px;">Available Trips</h3>
+    <div id="searchResultsList">
+      <p id="searchMessage" style="text-align: center; color: #777;">Please search for available trips.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  // --- Reusable Auth Check & Logout ---
+  function checkUserAuth() { /* ... same as before ... */ }
+  function setupLogout() { /* ... same as before ... */ }
+  function handleLogout(event) { /* ... same as before ... */ }
+
+  // --- Search & Display Logic ---
+  const searchForm = document.getElementById('searchForm');
+  const searchResultsListDiv = document.getElementById('searchResultsList');
+  const searchMessageP = document.getElementById('searchMessage');
+
+  if (searchForm) {
+    searchForm.addEventListener('submit', async function(event) { /* ... same as before ... */ });
+  } else { console.error("Search form not found!"); }
+
+  function displaySearchResults(trips) { /* ... same as before ... */ }
+
+  // **** MODIFIED handleBookNowClick Function ****
+  function handleBookNowClick(event) {
+    const tripId = event.target.dataset.tripId;
+    console.log(`Book Now clicked for Trip ID: ${tripId}`);
+
+    // --- REMOVED alert ---
+    // alert(`Booking process for Trip ID ${tripId} needs to be implemented!`);
+
+    // --- ADDED Redirect ---
+    // Redirect to the seat selection page, passing the tripId in the URL
+    window.location.href = `/booking/trip/${tripId}/select-seats`;
+  }
+  // **** END MODIFIED Function ****
+
+
+  // --- Initial Setup ---
+  document.addEventListener('DOMContentLoaded', function() { /* ... same as before ... */ });
+
+  // --- FULL JS ---
+  function checkUserAuth() {
+    const token = localStorage.getItem('authToken');
+    if (!token) { console.log("No token found, redirecting."); window.location.replace('/login'); return false; }
+    return true;
+  }
+  function setupLogout() {
+    const logoutLink = document.getElementById('logoutLink');
+    if (logoutLink) {
+      logoutLink.removeEventListener('click', handleLogout);
+      logoutLink.addEventListener('click', handleLogout);
+    }
+  }
+  function handleLogout(event) {
+    event.preventDefault();
+    localStorage.clear();
+    console.log("User logged out, redirecting to login.");
+    window.location.href = '/login';
+  }
+  // Display Search Results function from previous step
+  function displaySearchResults(trips) {
+    searchResultsListDiv.innerHTML = ''; // Clear previous results
+    trips.forEach(trip => {
+      const card = document.createElement('div');
+      card.className = 'trip-card';
+      const busOp = trip.bus?.operatorName || 'N/A';
+      const busType = trip.bus?.busType || 'N/A';
+      const origin = trip.route?.origin || 'N/A';
+      const dest = trip.route?.destination || 'N/A';
+      const depTime = trip.departureTime ? trip.departureTime.substring(0, 5) : '--:--';
+      const arrTime = trip.arrivalTime ? trip.arrivalTime.substring(0, 5) : '--:--';
+      const fare = trip.fare != null ? `₹${trip.fare.toFixed(2)}` : 'N/A';
+      const seats = trip.availableSeats != null ? `${trip.availableSeats} Seats Available` : 'Availability Unknown';
+      card.innerHTML = `
+                   <div class="trip-details"><h4>${busOp}</h4><p>${busType}</p><p><strong>Route:</strong> ${origin} → ${dest}</p><p><small>Trip ID: ${trip.id}</small></p></div>
+                   <div class="trip-timing"><p><strong>Depart:</strong> ${depTime}</p><p><strong>Arrive:</strong> ${arrTime}</p><p><strong>Date:</strong> ${trip.departureDate}</p></div>
+                   <div class="trip-booking"><p><strong>Fare:</strong> ${fare}</p><p><small>${seats}</small></p><button class="btn-vibrant book-btn" data-trip-id="${trip.id}">Book Now</button></div>
+               `;
+      searchResultsListDiv.appendChild(card);
+    });
+    document.querySelectorAll('.book-btn').forEach(button => {
+      button.addEventListener('click', handleBookNowClick);
+    });
+  }
+  // handleBookNowClick modified above
+  if (searchForm) {
+    searchForm.addEventListener('submit', async function(event) {
+      event.preventDefault();
+      if (!checkUserAuth()) return;
+      const origin = document.getElementById('searchOrigin').value.trim();
+      const destination = document.getElementById('searchDestination').value.trim();
+      const date = document.getElementById('searchDate').value;
+      if (!origin || !destination || !date) { searchMessageP.textContent = 'Please fill in Origin, Destination, and Date.'; searchResultsListDiv.innerHTML = ''; return; }
+      const today = new Date(); today.setHours(0,0,0,0);
+      const selectedDate = new Date(date + 'T00:00:00');
+      if (selectedDate < today) { searchMessageP.textContent = 'Search date cannot be in the past.'; searchResultsListDiv.innerHTML = ''; return; }
+      searchMessageP.textContent = 'Searching for trips...'; searchResultsListDiv.innerHTML = '';
+      const searchApiUrl = `/api/trips/search?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(date)}`;
+      console.log("Calling search API:", searchApiUrl);
+      try {
+        const response = await fetch(searchApiUrl, { method: 'GET', headers: { 'Accept': 'application/json' } });
+        if (!response.ok) { const errorText = await response.text(); throw new Error(errorText || `Error fetching trips: ${response.statusText}`); }
+        const trips = await response.json(); console.log("Trips received:", trips);
+        if (!trips || trips.length === 0) { searchMessageP.textContent = 'No available trips found for the selected criteria.'; }
+        else { searchMessageP.textContent = ''; displaySearchResults(trips); }
+      } catch (error) {
+        console.error('Error searching for trips:', error);
+        searchMessageP.textContent = `Error searching for trips: ${error.message}`;
+        searchResultsListDiv.innerHTML = '';
+      }
+    });
+  } else { console.error("Search form not found!"); }
+  document.addEventListener('DOMContentLoaded', function() {
+    if (!checkUserAuth()) return;
+    const userFirstName = localStorage.getItem('userFirstName');
+    const welcomeMsgElement = document.getElementById('welcomeMessage');
+    if (userFirstName && welcomeMsgElement) { welcomeMsgElement.textContent = `Welcome, ${userFirstName}!`; }
+    const dateInput = document.getElementById('searchDate');
+    if (dateInput) { const today = new Date().toISOString().split('T')[0]; dateInput.setAttribute('min', today); dateInput.value = today; }
+    setupLogout();
+  });
+</script>
+</body>
+</html>

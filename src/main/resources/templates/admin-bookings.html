@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - All Bookings</title>
+    <link rel="icon" type="image/png" th:href="@{/images/favicon.png}">
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <style>
+        /* Navbar styling */
+        nav { background-color: rgba(0,0,0,0.75); padding: 10px 30px; color: white; overflow: hidden; position: sticky; top: 0; z-index: 1000; }
+        nav span, nav a { line-height: 30px; color: white; text-decoration: none; vertical-align: middle; }
+        nav span { font-weight: bold; font-size: 1.2em; }
+        nav a.nav-link { margin-left: 25px; }
+        nav a#logoutLink { float: right; }
+        nav a:hover { text-decoration: underline; }
+
+        /* Content Box Styling */
+        .content-box { background-color: rgba(255, 255, 255, 0.9); padding: 25px 35px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.15); margin: 40px auto; max-width: 1600px; /* Wider table */ overflow-x: auto; color: #333; }
+        .page-title { color: #343a40; text-align: center; margin-bottom: 20px; font-weight: 700; }
+
+        /* Table styling */
+        .content-box table { width: 100%; border-collapse: collapse; }
+        .content-box th, .content-box td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; vertical-align: middle; white-space: normal; font-size: 0.9em; /* Smaller font for more data */}
+        .content-box th { background-color: #e9ecef; color: #495057; font-weight: 600; white-space: nowrap; } /* Keep headers nowrap */
+        .content-box tr:nth-child(even){background-color: #f8f9fa;}
+        .content-box tr:hover {background-color: #dee2e6;}
+
+        /* Status Badge Styling */
+        .booking-status { padding: 3px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold; color: white; white-space: nowrap;}
+        .booking-status.CONFIRMED { background-color: #28a745; }
+        .booking-status.PENDING { background-color: #ffc107; color: #333; }
+        .booking-status.CANCELLED { background-color: #6c757d; }
+        .booking-status.FAILED { background-color: #dc3545; }
+
+        /* Message Styling */
+        #apiMessage { text-align: center; padding: 10px; margin-bottom: 15px; border-radius: 5px; display: none; font-weight: bold; }
+        #apiMessage.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        #apiMessage.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        #loadingMessage, #noBookingsMessage { text-align: center; padding: 30px; font-size: 1.1em; color: #666; }
+        #noBookingsMessage { display: none; } /* Hide initially */
+
+    </style>
+</head>
+<body class="bg-admin">
+
+<nav>
+    <span>BusApp Admin</span>
+    <a href="/admin/dashboard" class="nav-link">Admin Home</a>
+    <a href="/admin/buses" class="nav-link">Manage Buses</a>
+    <a href="/admin/routes" class="nav-link">Manage Routes</a>
+    <a href="/admin/scheduled-trips" class="nav-link">Manage Trips</a>
+    <a href="/admin/bookings" class="nav-link">View Bookings</a> <a href="#" id="logoutLink">Logout</a>
+</nav>
+
+<div class="content-box">
+    <h2 class="page-title">All Bookings</h2>
+    <div id="apiMessage"></div>
+    <div id="loadingMessage"><p>Loading bookings...</p></div>
+    <div id="noBookingsMessage"><p>No bookings found in the system.</p></div>
+    <table>
+        <thead>
+        <tr>
+            <th>ID</th>
+            <th>User</th>
+            <th>Trip ID</th>
+            <th>Route</th>
+            <th>Bus</th>
+            <th>Dep. Date/Time</th>
+            <th>Seats</th>
+            <th>Total Fare</th>
+            <th>Status</th>
+            <th>Booked At</th>
+        </tr>
+        </thead>
+        <tbody id="bookingTableBody">
+        </tbody>
+    </table>
+</div>
+
+<script>
+    // --- Reusable Functions ---
+    function checkAdminAuth() {
+        const token = localStorage.getItem('authToken');
+        const rolesString = localStorage.getItem('userRoles');
+        let roles = [];
+        try { roles = rolesString ? JSON.parse(rolesString) : []; } catch(e) {}
+        if (!token || !roles.includes('ROLE_ADMIN')) {
+            console.log("Admin access required. Redirecting.");
+            localStorage.clear(); window.location.replace('/login'); return null;
+        } return token;
+    }
+    function setupLogout() {
+        const logoutLink = document.getElementById('logoutLink');
+        if (logoutLink) {
+            logoutLink.removeEventListener('click', handleLogout);
+            logoutLink.addEventListener('click', handleLogout);
+        }
+    }
+    function handleLogout(event) {
+        event.preventDefault();
+        localStorage.clear(); window.location.href = '/login';
+    }
+    function showApiMessage(message, isError = false) {
+        const msgDiv = document.getElementById('apiMessage');
+        if (!msgDiv) return;
+        msgDiv.textContent = message;
+        msgDiv.className = isError ? 'error' : 'success';
+        msgDiv.style.display = 'block';
+        setTimeout(() => { if(msgDiv) msgDiv.style.display = 'none'; }, 5000);
+    }
+    function showInfoMessage(elementId, show = true) {
+        const el = document.getElementById(elementId);
+        if(el) el.style.display = show ? 'block' : 'none';
+    }
+
+    // --- Fetch and Display All Bookings ---
+    async function fetchAndDisplayAllBookings(token) {
+        const tableBody = document.getElementById('bookingTableBody');
+        const loadingMsg = 'loadingMessage';
+        const errorMsg = 'apiMessage'; // Use apiMessage for errors
+        const noBookingsMsg = 'noBookingsMessage';
+
+        showInfoMessage(loadingMsg, true);
+        showInfoMessage(noBookingsMsg, false);
+        showApiMessage('', false); // Clear errors
+
+        if (!tableBody) { console.error("bookingTableBody not found!"); showInfoMessage(loadingMsg, false); return; }
+        tableBody.innerHTML = ''; // Clear previous results
+
+        try {
+            const response = await fetch('/api/admin/bookings', {
+                method: 'GET',
+                headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
+            });
+
+            showInfoMessage(loadingMsg, false); // Hide loading message
+
+            if (response.status === 204) { // No content
+                showInfoMessage(noBookingsMsg, true);
+                return;
+            }
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || `HTTP error! Status: ${response.status}`);
+            }
+
+            const bookings = await response.json();
+            console.log("Bookings received:", bookings);
+
+            if (!bookings || bookings.length === 0) {
+                showInfoMessage(noBookingsMsg, true);
+            } else {
+                displayAllBookings(bookings);
+            }
+
+        } catch (error) {
+            console.error('Error fetching all bookings:', error);
+            showInfoMessage(loadingMsg, false);
+            showApiMessage(`Error loading bookings: ${error.message}`, true);
+        }
+    }
+
+    function displayAllBookings(bookings) {
+        const tableBody = document.getElementById('bookingTableBody');
+        tableBody.innerHTML = ''; // Clear just in case
+
+        bookings.forEach(booking => {
+            const row = tableBody.insertRow();
+
+            // Helper function for safe access
+            const safeGet = (obj, path, defaultValue = 'N/A') => {
+                const value = path.split('.').reduce((o, p) => (o && o[p] != null) ? o[p] : null, obj);
+                return value != null ? value : defaultValue;
+            };
+
+            const tripId = safeGet(booking, 'tripDetails.id');
+            const routeInfo = `${safeGet(booking, 'tripDetails.route.origin')} -> ${safeGet(booking, 'tripDetails.route.destination')}`;
+            const busInfo = `${safeGet(booking, 'tripDetails.bus.busNumber')} (${safeGet(booking, 'tripDetails.bus.operatorName')})`;
+            const depDate = safeGet(booking, 'tripDetails.departureDate');
+            const depTime = safeGet(booking, 'tripDetails.departureTime', '--:--').substring(0,5);
+            const passengerSeats = booking.passengers ? booking.passengers.map(p => p.seatNumber).join(', ') : 'N/A';
+            const totalFare = booking.totalFare != null ? `₹${booking.totalFare.toFixed(2)}` : 'N/A';
+            const bookedAt = booking.bookingTime ? new Date(booking.bookingTime).toLocaleString() : 'N/A';
+
+            row.insertCell().textContent = booking.bookingId;
+            row.insertCell().textContent = `${safeGet(booking, 'userFullName', '')} (${safeGet(booking, 'userEmail')})`;
+            row.insertCell().textContent = tripId;
+            row.insertCell().textContent = routeInfo;
+            row.insertCell().textContent = busInfo;
+            row.insertCell().textContent = `${depDate} ${depTime}`;
+            row.insertCell().textContent = passengerSeats;
+            row.insertCell().textContent = totalFare;
+
+            // Status cell with badge
+            const statusCell = row.insertCell();
+            const statusSpan = document.createElement('span');
+            statusSpan.textContent = booking.status;
+            statusSpan.className = `booking-status ${booking.status || 'UNKNOWN'}`;
+            statusCell.appendChild(statusSpan);
+
+            row.insertCell().textContent = bookedAt;
+
+            // Example: Add actions column placeholder if needed later
+            // const actionsCell = row.insertCell();
+            // actionsCell.innerHTML = `<button class="action-btn">Action</button>`;
+        });
+    }
+
+    // --- Initial Load ---
+    document.addEventListener('DOMContentLoaded', () => {
+        const adminToken = checkAdminAuth();
+        if (adminToken) {
+            fetchAndDisplayAllBookings(adminToken);
+            setupLogout();
+        }
+    });
+</script>
+
+</body>
+</html>

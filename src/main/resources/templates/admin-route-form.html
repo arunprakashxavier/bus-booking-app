@@ -1,0 +1,200 @@
+<!--admin-route-form.html-->
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${routeDto.id == null} ? 'Admin - Add Route' : 'Admin - Edit Route'">Admin - Route Form</title>
+    <link rel="icon" type="image/png" th:href="@{/images/favicon.png}">
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <style>
+        /* Navbar styling */
+        nav { background-color: rgba(0,0,0,0.7); padding: 10px 30px; color: white; position: sticky; top: 0; z-index: 1000; }
+        nav span, nav a { color: white; text-decoration: none; margin-right: 20px; line-height: 30px; vertical-align: middle;}
+        nav span { font-weight: bold; font-size: 1.1em; }
+        nav a.nav-link { margin-left: 20px; }
+        nav a#logoutLink { float: right; }
+        nav a:hover { text-decoration: underline; }
+
+        /* Form Container Styling */
+        .admin-form-container { background-color: rgba(255, 255, 255, 0.9); padding: 30px 40px; border-radius: 15px; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15); width: 100%; max-width: 600px; margin: 30px auto; color: #333; }
+        .admin-form-container h2 { text-align: center; margin-bottom: 25px; color: #333; font-weight: 600;}
+        .form-group { margin-bottom: 20px; }
+        .form-group label { font-weight: 500; display: block; margin-bottom: 8px; }
+        .form-group input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+
+        /* Feedback messages */
+        #apiResponse { text-align:center; margin-bottom: 15px; font-weight: bold; padding: 10px; border-radius: 5px; display: none; }
+        #apiResponse.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        #apiResponse.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+
+        /* Buttons */
+        .button-group { display: flex; justify-content: center; gap: 15px; margin-top: 30px; }
+        .btn-vibrant { padding: 10px 25px; font-size: 1em; font-weight: bold; border-radius: 6px; cursor: pointer; border: none; color: white; text-align: center; transition: 0.3s ease; text-transform: uppercase; letter-spacing: 0.5px; display: inline-block; width: auto; text-decoration: none; }
+        .btn-primary { background: linear-gradient(45deg, #007bff, #0056b3); }
+        .btn-primary:hover { background: linear-gradient(45deg, #0056b3, #007bff); transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        .btn-cancel { background-color: #6c757d; }
+        .btn-cancel:hover { background-color: #5a6268; transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+    </style>
+</head>
+<body class="bg-admin">
+<nav>
+    <span>BusApp Admin</span>
+    <a href="/admin/dashboard" class="nav-link">Admin Home</a>
+    <a href="/admin/buses" class="nav-link">Manage Buses</a>
+    <a href="/admin/routes" class="nav-link">Manage Routes</a>
+    <a href="/admin/scheduled-trips" class="nav-link">Manage Trips</a>
+    <a href="/admin/bookings" class="nav-link">View Bookings</a> <a href="#" id="logoutLink">Logout</a>
+</nav>
+
+<div class="admin-form-container">
+    <h2 th:text="${routeDto.id == null} ? 'Add New Route' : 'Edit Route'">Route Form</h2>
+
+    <div id="apiResponse"></div>
+
+    <form id="routeForm" th:object="${routeDto}">
+        <input type="hidden" id="id" th:field="*{id}" />
+
+        <div class="form-group">
+            <label for="origin">Origin:</label>
+            <input type="text" id="origin" placeholder="e.g., Chennai" th:field="*{origin}" required>
+        </div>
+
+        <div class="form-group">
+            <label for="destination">Destination:</label>
+            <input type="text" id="destination" placeholder="e.g., Madurai" th:field="*{destination}" required>
+        </div>
+
+        <div class="button-group">
+            <button type="submit" class="btn-vibrant btn-primary">Save Route</button>
+            <a th:href="@{/admin/routes}" class="btn-vibrant btn-cancel">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<script>
+    // --- Reusable Auth Check ---
+    function checkAdminAuth() {
+        const token = localStorage.getItem('authToken');
+        const rolesString = localStorage.getItem('userRoles');
+        let roles = [];
+        try { roles = rolesString ? JSON.parse(rolesString) : []; } catch(e) { console.error("Error parsing roles", e); }
+        if (!token || !roles.includes('ROLE_ADMIN')) {
+            console.log("Admin access required. Redirecting to login.");
+            localStorage.clear(); window.location.replace('/login'); return null;
+        } return token;
+    }
+
+    // --- Reusable API Message Display ---
+    function showApiMessage(message, isError = false) {
+        const msgDiv = document.getElementById('apiResponse');
+        if (!msgDiv) return;
+        msgDiv.textContent = message;
+        msgDiv.className = isError ? 'error' : 'success';
+        msgDiv.style.display = 'block';
+        if (!isError) {
+            setTimeout(() => { if(msgDiv) msgDiv.style.display = 'none'; }, 5000);
+        }
+    }
+
+    // --- Logout Handler ---
+    function setupLogout() {
+        const logoutLink = document.getElementById('logoutLink');
+        if (logoutLink) {
+            logoutLink.removeEventListener('click', handleLogout);
+            logoutLink.addEventListener('click', handleLogout);
+        }
+    }
+    function handleLogout(event) {
+        event.preventDefault();
+        localStorage.clear();
+        console.log("Admin logged out, redirecting to login.");
+        window.location.href = '/login';
+    }
+
+    // --- Form Submission Logic ---
+    document.addEventListener('DOMContentLoaded', function () {
+        const token = checkAdminAuth();
+        if (!token) return;
+
+        const routeForm = document.getElementById('routeForm');
+        const routeIdField = document.getElementById('id');
+        const apiResponseDiv = document.getElementById('apiResponse');
+
+        if(!routeForm || !routeIdField || !apiResponseDiv) {
+            console.error("Route Form elements not found!");
+            return;
+        }
+
+        routeForm.addEventListener('submit', async function (event) {
+            event.preventDefault();
+            apiResponseDiv.style.display = 'none';
+            apiResponseDiv.textContent = '';
+            apiResponseDiv.className = '';
+
+            const routeId = routeIdField.value;
+            const isEditMode = routeId && routeId !== '0' && routeId !== '';
+
+            const routeData = {
+                id: isEditMode ? routeId : null,
+                origin: document.getElementById('origin').value.trim(),
+                destination: document.getElementById('destination').value.trim()
+            };
+
+            if (!routeData.origin || !routeData.destination) {
+                showApiMessage("Origin and Destination cannot be empty.", true);
+                return;
+            }
+            if (routeData.origin.toLowerCase() === routeData.destination.toLowerCase()) {
+                showApiMessage("Origin and Destination cannot be the same.", true);
+                return;
+            }
+
+            const apiUrl = isEditMode ? `/api/admin/routes/${routeId}` : '/api/admin/routes';
+            const httpMethod = isEditMode ? 'PUT' : 'POST';
+
+            console.log(`Submitting route data (${httpMethod}) to ${apiUrl}:`, routeData);
+
+            const currentToken = checkAdminAuth();
+            if (!currentToken) {
+                showApiMessage("Authentication error. Please log in again.", true);
+                setTimeout(() => { window.location.replace('/login'); }, 1000);
+                return;
+            }
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: httpMethod,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${currentToken}`
+                    },
+                    body: JSON.stringify(routeData)
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    console.log('Save successful:', result);
+                    sessionStorage.setItem('apiSuccessMessage', `Route ${isEditMode ? 'updated' : 'added'} successfully!`);
+                    window.location.href = '/admin/routes';
+
+                } else {
+                    const errorText = await response.text();
+                    let detailError = errorText;
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        detailError = errorJson.message || errorJson.error || errorText;
+                    } catch(e) { /* Ignore */ }
+                    throw new Error(detailError || `Failed to save route. Status: ${response.status}`);
+                }
+            } catch (error) {
+                console.error('Error saving route:', error);
+                showApiMessage(`Error saving route: ${error.message}`, true);
+            }
+        });
+
+        setupLogout();
+    });
+</script>
+</body>
+</html>
