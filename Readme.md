@@ -6,6 +6,8 @@
 
 Welcome to BusApp! This is a full-stack web application designed to streamline the process of searching, booking, and managing bus tickets online. Built with modern Java technologies, it provides distinct interfaces for both regular users seeking travel and administrators managing the service.
 
+**Watch a video demonstration of the application working:** [BusApp Demo Video](https://drive.google.com/file/d/1XD_HrwuxItpUGmjI6xTvT9Q2u2XIuZRB/view?usp=drive_link)
+
 ## ✨ Key Features
 
 * **👤 User Management:** Secure JWT-based authentication (Login/Registration) with distinct User & Admin roles. Profile viewing, editing, and password changes.
