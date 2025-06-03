@@ -16,7 +16,6 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     // Find bookings by user, ordered by booking time descending
     List<Booking> findByUserOrderByBookingTimeDesc(User user);
 
-    // **** ADDED: Find PENDING bookings created before a certain time ****
     @Query("SELECT b FROM Booking b WHERE b.status = :status AND b.bookingTime < :expiryTime")
     List<Booking> findExpiredPendingBookings(@Param("expiryTime") LocalDateTime expiryTime, @Param("status") Booking.BookingStatus status);
 }

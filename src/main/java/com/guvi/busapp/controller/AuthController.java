@@ -4,8 +4,8 @@ package com.guvi.busapp.controller;
 import com.guvi.busapp.dto.JwtResponseDto;
 import com.guvi.busapp.dto.LoginDto;
 import com.guvi.busapp.dto.RegisterDto;
-import com.guvi.busapp.model.User;
-import com.guvi.busapp.repository.UserRepository; // Keep UserRepository import
+import com.guvi.busapp.model.CustomUserDetails;
+import com.guvi.busapp.model.User; // Your User entity for registration response
 import com.guvi.busapp.service.UserService;
 import com.guvi.busapp.util.JwtUtils;
 import jakarta.validation.Valid;
@@ -20,73 +20,63 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.web.bind.annotation.*; // Import needed annotations
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/auth") // Base path for API authentication endpoints
+@RequestMapping("/api/auth")
 public class AuthController {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
 
-    @Autowired
-    private UserService userService;
+    private final UserService userService;
+    private final AuthenticationManager authenticationManager;
+    private final JwtUtils jwtUtils;
 
     @Autowired
-    private AuthenticationManager authenticationManager;
+    public AuthController(UserService userService,
+                          AuthenticationManager authenticationManager,
+                          JwtUtils jwtUtils) {
+        this.userService = userService;
+        this.authenticationManager = authenticationManager;
+        this.jwtUtils = jwtUtils;
+    }
 
-    @Autowired
-    private JwtUtils jwtUtils;
-
-    @Autowired
-    private UserRepository userRepository;
-
-    // == Process Registration API ==
     @PostMapping("/register")
-    // Now accepts JSON and returns ResponseEntity
     public ResponseEntity<?> processRegistrationApi(@Valid @RequestBody RegisterDto registerDto) {
-
         logger.info("API attempting to register user with email: {}", registerDto.getEmail());
 
-        // Password match check (can also be handled by class-level DTO validator)
         if (registerDto.getPassword() != null && !registerDto.getPassword().equals(registerDto.getConfirmPassword())) {
-            // Return a clear error response
             return ResponseEntity
-                    .badRequest() // HTTP 400
+                    .badRequest()
                     .body("Error: Passwords do not match!");
         }
 
-        // Try to register the user via the service
         try {
-            User registeredUser = userService.registerUser(registerDto); // Service throws IllegalArgumentException for duplicates
+            // UserService handles registration and checks for duplicates
+            User registeredUser = userService.registerUser(registerDto);
             logger.info("API User registered successfully: {}", registerDto.getEmail());
-
-            // Return a success response
+            // Consider returning a DTO instead of the full User entity, or just a success message.
+            // For now, returning a simple message.
             return ResponseEntity
-                    .status(HttpStatus.CREATED) // HTTP 201
-                    .body("User registered successfully!"); // Or return basic user info (ID, email)
+                    .status(HttpStatus.CREATED)
+                    .body("User registered successfully!");
 
         } catch (IllegalArgumentException e) {
-            // Handle known registration errors (like duplicate email)
             logger.error("API Registration failed for email {}: {}", registerDto.getEmail(), e.getMessage());
             return ResponseEntity
-                    .badRequest() // HTTP 400
-                    .body(e.getMessage()); // Return the specific error message
-
+                    .badRequest()
+                    .body(e.getMessage());
         } catch (Exception e) {
-            // Catch any other unexpected errors during registration
             logger.error("Unexpected error during API registration for email {}: {}", registerDto.getEmail(), e.getMessage(), e);
             return ResponseEntity
-                    .status(HttpStatus.INTERNAL_SERVER_ERROR) // HTTP 500
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("An unexpected error occurred during registration.");
         }
     }
 
-
-    // == Process Login API (Returns JSON with JWT) - No Changes Needed Here ==
     @PostMapping("/login")
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginDto loginDto) {
         logger.info("Attempting to authenticate user with email: {}", loginDto.getEmail());
@@ -96,17 +86,21 @@ public class AuthController {
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
             String jwt = jwtUtils.generateJwtToken(authentication);
-            UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-            List<String> roles = userDetails.getAuthorities().stream()
+
+
+            CustomUserDetails customUserDetails = (CustomUserDetails) authentication.getPrincipal();
+
+            List<String> roles = customUserDetails.getAuthorities().stream()
                     .map(GrantedAuthority::getAuthority)
                     .collect(Collectors.toList());
 
-            User userModel = userRepository.findByEmail(userDetails.getUsername()).orElse(null);
-            Long userId = (userModel != null) ? userModel.getId() : null;
-            String firstName = (userModel != null) ? userModel.getFirstName() : null;
-            String lastName = (userModel != null) ? userModel.getLastName() : null;
+            // Get details from CustomUserDetails
+            Long userId = customUserDetails.getId();
+            String email = customUserDetails.getUsername(); // getUsername() from UserDetails returns the email
+            String firstName = customUserDetails.getFirstName();
+            String lastName = customUserDetails.getLastName();
 
-            JwtResponseDto jwtResponse = new JwtResponseDto(jwt, userId, userDetails.getUsername(), firstName, lastName, roles);
+            JwtResponseDto jwtResponse = new JwtResponseDto(jwt, userId, email, firstName, lastName, roles);
 
             logger.info("User {} authenticated successfully. JWT issued.", loginDto.getEmail());
             return ResponseEntity.ok(jwtResponse);
@@ -114,7 +108,11 @@ public class AuthController {
         } catch (AuthenticationException e) {
             logger.error("Authentication failed for user {}: {}", loginDto.getEmail(), e.getMessage());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Error: Invalid credentials!");
-        } catch (Exception e) {
+        } catch (ClassCastException e) {
+            logger.error("Error casting Principal to CustomUserDetails. Check UserDetailsService implementation.", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error: Authentication configuration issue.");
+        }
+        catch (Exception e) {
             logger.error("Error during authentication for user {}: {}", loginDto.getEmail(), e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error: An internal error occurred during login.");
         }

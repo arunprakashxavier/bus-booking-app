@@ -5,6 +5,7 @@ import com.guvi.busapp.dto.BookingRequestDto;
 import com.guvi.busapp.dto.BookingResponseDto;
 import com.guvi.busapp.exception.ResourceNotFoundException;
 import com.guvi.busapp.exception.SeatUnavailableException;
+import com.guvi.busapp.model.Booking; // Import Booking model
 
 import java.util.List;
 
@@ -19,13 +20,17 @@ public interface BookingService {
     List<BookingResponseDto> getBookingsByUser(String userEmail)
             throws ResourceNotFoundException;
 
-    // **** ADDED: Method for Admin to get all bookings ****
-    /**
-     * Retrieves all bookings in the system, typically ordered by booking time descending.
-     * Intended for Admin use.
-     *
-     * @return A list of all BookingResponseDto objects.
-     */
     List<BookingResponseDto> getAllBookings();
 
+    /**
+     * Retrieves a booking entity by its ID.
+     * This method is intended for internal service use, for example, by PaymentService.
+     *
+     * @param bookingId The ID of the booking to retrieve.
+     * @return The Booking entity.
+     * @throws ResourceNotFoundException if the booking with the given ID is not found.
+     */
+    Booking getBookingEntityById(Long bookingId) throws ResourceNotFoundException;
 }
+
+

@@ -29,7 +29,6 @@ public class UserController {
     @Autowired
     private BookingService bookingService;
 
-    // **** ADDED UserService Injection ****
     @Autowired
     private UserService userService;
 

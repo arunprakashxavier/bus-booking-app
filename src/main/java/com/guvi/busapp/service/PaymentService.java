@@ -1,37 +1,36 @@
+
 // src/main/java/com/guvi/busapp/service/PaymentService.java
 package com.guvi.busapp.service;
 
+import com.guvi.busapp.exception.ResourceNotFoundException;
 import com.stripe.exception.StripeException;
 import com.stripe.model.PaymentIntent;
+import org.springframework.security.access.AccessDeniedException;
 
 /**
  * Service interface for handling payment gateway interactions.
  */
 public interface PaymentService {
 
-    PaymentIntent createPaymentIntent(Long bookingId, Long amount, String currency, String userEmail) throws StripeException;
+    /**
+     * Creates a Stripe PaymentIntent for a given booking.
+     * Verifies booking ownership and status.
+     *
+     * @param bookingId The ID of the booking.
+     * @param userEmailForVerification The email of the authenticated user, for verification.
+     * @return The created Stripe PaymentIntent.
+     * @throws StripeException If there's an error with the Stripe API.
+     * @throws ResourceNotFoundException If the booking is not found.
+     * @throws AccessDeniedException If the user does not own the booking.
+     * @throws IllegalStateException If the booking is not in a PENDING state.
+     */
+    PaymentIntent createPaymentIntent(Long bookingId, String userEmailForVerification)
+            throws StripeException, ResourceNotFoundException, AccessDeniedException, IllegalStateException;
+
 
     boolean verifyWebhookSignature(String payload, String sigHeader);
 
-    // --- MODIFIED Webhook Handler Method Signatures ---
-
-    /**
-     * Handles the logic after a Stripe PaymentIntent succeeds.
-     * Updates Booking status to CONFIRMED and ScheduledTrip seats to BOOKED.
-     *
-     * @param paymentIntentId The ID of the successful Stripe PaymentIntent (pi_...).
-     * @param bookingId       The corresponding booking ID extracted from metadata.
-     * @param amount          (Optional) The amount received, for verification.
-     * @param currency        (Optional) The currency received, for verification.
-     */
     void handlePaymentSuccess(String paymentIntentId, Long bookingId, Long amount, String currency);
 
-    /**
-     * Handles the logic after a Stripe PaymentIntent fails.
-     * Updates Booking status to FAILED and reverts ScheduledTrip seats to AVAILABLE.
-     *
-     * @param paymentIntentId The ID of the failed Stripe PaymentIntent (pi_...).
-     * @param bookingId       The corresponding booking ID extracted from metadata.
-     */
     void handlePaymentFailure(String paymentIntentId, Long bookingId);
 }

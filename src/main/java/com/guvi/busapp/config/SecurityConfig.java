@@ -109,7 +109,6 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 );
 
-        // Add custom JWT filter before the standard username/password filter
         http.authenticationProvider(authenticationProvider());
         http.addFilterBefore(authTokenFilter, UsernamePasswordAuthenticationFilter.class);
 
